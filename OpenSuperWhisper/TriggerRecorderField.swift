@@ -153,6 +153,9 @@ struct TriggerRecorderField: View {
         .onHover { isHovering = $0 }
         .pointerCursorOnHover()
         .onAppear { loadShortcut() }
+        .onReceive(NotificationCenter.default.publisher(for: .hotkeySettingsChanged)) { _ in
+            if !isRecording { loadShortcut() }
+        }
         .onDisappear { disarm() }
         .animation(.easeOut(duration: 0.12), value: heldModifiers.rawValue)
         .animation(.easeOut(duration: 0.12), value: isRecording)
