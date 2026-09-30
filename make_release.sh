@@ -16,6 +16,10 @@ CODE_SIGN_IDENTITY="${2}"
 # environment" branch below could never be reached and a non-interactive run always stalled on
 # the prompt. Passing it as an argument also puts the token in the process list.
 GITHUB_TOKEN="${3:-${GITHUB_TOKEN:-}}"
+# What changed, in Markdown, put at the top of the GitHub release above the install steps. The
+# release page is what people read, and until 0.12.8 it only ever carried the install boilerplate
+# while the real notes lived in issue #1 (#142).
+RELEASE_NOTES="${RELEASE_NOTES:-}"
 
 if [[ -z "$CODE_SIGN_IDENTITY" ]]; then
     echo "❌ Error: Code signing identity is required"
@@ -92,6 +96,14 @@ echo "📝 Updating version to ${NEW_VERSION} in Xcode project..."
 PROJECT_FILE="OpenSuperWhisper.xcodeproj/project.pbxproj"
 PREVIOUS_VERSION=$(grep -o 'MARKETING_VERSION = [^;]*' "${PROJECT_FILE}" | head -1 | sed 's/.*= *//')
 CURRENT_PROJECT_VERSION=$(grep -o 'CURRENT_PROJECT_VERSION = [0-9]*' "${PROJECT_FILE}" | head -1 | grep -o '[0-9]*')
+
+# Checked before the build for the same reason as the credentials: the release is created at the
+# very end. Only the first architecture creates it, so only that run needs the notes.
+if [[ "${PREVIOUS_VERSION}" != "${NEW_VERSION}" && -n "$GITHUB_TOKEN" && ! -s "$RELEASE_NOTES" ]]; then
+    echo "❌ RELEASE_NOTES must point to a Markdown file saying what changed in ${NEW_VERSION}."
+    echo "   Example: RELEASE_NOTES=notes-${NEW_VERSION}.md $0 ${NEW_VERSION} \"<identity>\""
+    exit 1
+fi
 
 if [[ "${PREVIOUS_VERSION}" == "${NEW_VERSION}" ]]; then
     NEW_PROJECT_VERSION="${CURRENT_PROJECT_VERSION}"
@@ -217,21 +229,37 @@ if [[ -n "$GITHUB_TOKEN" ]]; then
     else
         echo "🚀 Creating GitHub release..."
     
-        # Create release
+        # Create release. The body is built with jq so the notes can hold quotes, backticks and
+        # newlines without breaking the JSON.
+        INSTALL_NOTES=$(cat <<INSTALL
+## Installation
+
+### Homebrew (Recommended)
+\`\`\`bash
+brew install --cask my-monkeys/tap/opensuperwhisper
+\`\`\`
+Use the full \`my-monkeys/tap/\` path: the bare name resolves to the homebrew-cask entry for the original project, not this fork.
+
+### Manual Installation
+1. Download the \`${APP_NAME}-${ARCH}-${NEW_VERSION}.dmg\` file below
+2. Open the DMG and drag OpenSuperWhisper to Applications
+3. Launch the app and grant necessary permissions
+
+## Requirements
+- macOS 14.0 (Sonoma) or later
+- Apple Silicon or Intel
+INSTALL
+)
+        RELEASE_BODY="$(cat "$RELEASE_NOTES")"$'\n\n'"${INSTALL_NOTES}"
+        RELEASE_PAYLOAD=$(jq -n --arg tag "$TAG" --arg name "Release ${NEW_VERSION}" --arg body "$RELEASE_BODY" \
+            '{tag_name: $tag, target_commitish: "master", name: $name, body: $body,
+              draft: false, prerelease: false, generate_release_notes: false}')
         RELEASE_RESPONSE=$(curl -s -L -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             https://api.github.com/repos/${REPO}/releases \
-            -d '{
-                "tag_name": "'${TAG}'",
-                "target_commitish": "master",
-                "name": "Release '${NEW_VERSION}'",
-                "body": "## OpenSuperWhisper '${NEW_VERSION}'\n\nReal-time audio transcription for macOS using Whisper.\n\n## Installation\n\n### Homebrew (Recommended)\n```bash\nbrew install --cask my-monkeys/tap/opensuperwhisper\n```\nUse the full `my-monkeys/tap/` path: the bare name resolves to the homebrew-cask entry for the original project, not this fork.\n\n### Manual Installation\n1. Download the `'${APP_NAME}-${ARCH}-${NEW_VERSION}'.dmg` file below\n2. Open the DMG and drag OpenSuperWhisper to Applications\n3. Launch the app and grant necessary permissions\n\n## Requirements\n- macOS 14.0 (Sonoma) or later\n- Apple Silicon or Intel",
-                "draft": false,
-                "prerelease": false,
-                "generate_release_notes": false
-            }')
+            -d "$RELEASE_PAYLOAD")
     
         # Extract release ID from response
         # Same reason: a creation that failed has no id to find, and the explicit check just
