@@ -303,6 +303,8 @@ final class AppPreferences {
     @UserDefault(key: "debugMode", defaultValue: false)
     var debugMode: Bool
     
+    /// Chime at the start and at the end of a take. The key predates the end chime and stays
+    /// as it is so the setting carries over.
     @UserDefault(key: "playSoundOnRecordStart", defaultValue: false)
     var playSoundOnRecordStart: Bool
 

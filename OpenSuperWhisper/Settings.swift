@@ -2827,7 +2827,7 @@ struct SettingsView: View {
             }
 
             SSection(title: "While recording") {
-                SRow(title: "Play sound when recording starts",
+                SRow(title: "Play sound when recording starts and stops",
                      hint: "Also plays when a recording is latched hands-free") {
                     SToggle(isOn: $viewModel.playSoundOnRecordStart)
                 }
