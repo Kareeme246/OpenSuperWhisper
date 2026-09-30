@@ -36,13 +36,14 @@ struct OpenSuperWhisperApp: App {
         WindowGroup {
             Group {
                 if !appState.hasCompletedOnboarding {
+                    // The window opens at the Settings size and keeps it once onboarding is
+                    // done, so onboarding fills it rather than sitting in a 450 pt column.
                     OnboardingView()
+                        .frame(minWidth: 450, maxWidth: .infinity, minHeight: 400, maxHeight: .infinity)
                 } else {
-                    ContentView()
+                    SettingsView()
                 }
             }
-            .frame(width: 450)
-            .frame(minHeight: 400, maxHeight: 900)
             .environmentObject(appState)
             // The main window never had this, so its history list ignored the text size
             // setting entirely while Settings obeyed it. Read through @AppStorage rather than
@@ -51,28 +52,23 @@ struct OpenSuperWhisperApp: App {
             .environment(\.appTextScale, textScale)
         }
         .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 450, height: 650)
+        .defaultSize(width: 780, height: 600)
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .appSettings) {
+                // The window is the settings UI too: bring it forward on a settings pane
+                // (showMainWindow also re-creates the window if macOS dropped it).
                 Button("Settings...") {
                     if let delegate = NSApplication.shared.delegate as? AppDelegate {
                         delegate.showMainWindow()
                     }
-                    NotificationCenter.default.post(name: .openSettings, object: nil)
+                    NotificationCenter.default.post(name: .showSettingsPane, object: nil)
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
         }
         .handlesExternalEvents(matching: Set(arrayLiteral: "openMainWindow"))
-
-        // Dedicated, movable & closable settings window (sidebar layout).
-        Window("Settings", id: "settings") {
-            SettingsView()
-        }
-        .windowResizability(.contentMinSize)
-        .defaultSize(width: 780, height: 600)
     }
 
     init() {
@@ -119,7 +115,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
     /// The app's own window, looked up rather than remembered: SwiftUI creates it after
     /// `applicationDidFinishLaunching` has run, and owns it from then on.
     private var mainWindow: NSWindow? {
-        NSApplication.shared.windows.first { $0.styleMask.contains(.titled) && $0.title != "Settings" }
+        NSApplication.shared.windows.first { $0.styleMask.contains(.titled) }
     }
     private var languageSubmenu: NSMenu?
     private var modelSubmenu: NSMenu?
@@ -254,10 +250,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
 
     private func updateStatusBarMenu() {
         let menu = NSMenu()
-        
-        let openItem = NSMenuItem(title: "Open Window", action: #selector(openApp), keyEquivalent: "o")
-        openItem.target = self   // without a target macOS disables the item (it did nothing)
-        menu.addItem(openItem)
+
+        // One window, two ways in: this one opens on the list, "Settings…" below on the settings.
+        let transcriptionsItem = NSMenuItem(title: NSLocalizedString("Transcriptions", comment: ""),
+                                            action: #selector(openTranscriptions), keyEquivalent: "o")
+        transcriptionsItem.target = self   // without a target macOS disables the item
+        menu.addItem(transcriptionsItem)
 
         let transcriptionLanguageItem = NSMenuItem(title: NSLocalizedString("Language", comment: ""), action: nil, keyEquivalent: "")
         languageSubmenu = NSMenu()
@@ -591,13 +589,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
         statusItem?.button?.performClick(nil)
     }
     
-    @objc private func openApp() {
-        showMainWindow()
-    }
-
     @objc private func openSettings() {
         showMainWindow()
-        NotificationCenter.default.post(name: .openSettings, object: nil)
+        NotificationCenter.default.post(name: .showSettingsPane, object: nil)
+    }
+
+    @objc private func openTranscriptions() {
+        showMainWindow()
+        NotificationCenter.default.post(name: .showTranscriptions, object: nil)
     }
 
     @objc private func quitApp() {

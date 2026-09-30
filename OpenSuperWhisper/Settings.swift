@@ -1510,13 +1510,26 @@ struct InfoButton: View {
     }
 }
 
+/// A keyboard shortcut shown inside a search field.
+struct ShortcutBadge: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .scaledFont(size: 10, design: .monospaced)
+            .foregroundColor(STheme.hint)
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background(RoundedRectangle(cornerRadius: 4).fill(STheme.controlBg))
+    }
+}
+
 /// The settings tabs, shown as a vertical sidebar in the dedicated settings window.
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case dictation, appearance, models, output, rules, history, advanced, updates, feedback
+    case dictation, appearance, models, output, rules, history, transcriptions, advanced, updates, feedback
     var id: String { rawValue }
 
     /// Main navigation (sidebar top) vs utility items (sidebar footer).
-    static let main: [SettingsTab] = [.dictation, .appearance, .models, .output, .rules, .history, .advanced]
+    static let main: [SettingsTab] = [.transcriptions, .dictation, .appearance, .models, .output, .rules, .history, .advanced]
     static let footer: [SettingsTab] = [.updates, .feedback]
 
     var title: String {
@@ -1527,6 +1540,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .output: return "Output"
         case .rules: return "Rules"
         case .history: return "History & Privacy"
+        case .transcriptions: return "Transcriptions"
         case .advanced: return "Advanced"
         case .updates: return "Updates"
         case .feedback: return "Feedback"
@@ -1542,6 +1556,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .output: return "text.bubble"
         case .rules: return "arrow.triangle.branch"
         case .history: return "clock.arrow.circlepath"
+        case .transcriptions: return "list.bullet.rectangle.portrait"
         case .advanced: return "gearshape"
         case .updates: return "sparkles"
         case .feedback: return "heart.text.square"
@@ -1576,9 +1591,11 @@ struct SettingsView: View {
     @State private var appLanguage = LanguageManager.selected
     @State private var langNeedsRelaunch = false
     @State private var showPunctuationCalibration = false
+    @ObservedObject private var fileDrop = FileDropHandler.shared
 
     /// `initialTab` is for the layout tests, which render every pane in turn (#138).
-    init(initialTab: SettingsTab = .dictation) {
+    /// Transcriptions is the app's first tab (#137), so it is the default.
+    init(initialTab: SettingsTab = .transcriptions) {
         _selectedTab = State(initialValue: initialTab)
     }
 
@@ -1624,6 +1641,24 @@ struct SettingsView: View {
         }
     }
 
+    /// The Transcriptions tab stays mounted under the others. Rebuilt on every visit, it lost
+    /// the search, the scroll position and the expanded cards, and a recording started from its
+    /// button kept running with nobody left to cancel it on Esc.
+    private var detailStack: some View {
+        let showingTranscriptions = selectedTab == .transcriptions
+        return ZStack(alignment: .topLeading) {
+            transcriptionsTab
+                .opacity(showingTranscriptions ? 1 : 0)
+                .allowsHitTesting(showingTranscriptions)
+                .accessibilityHidden(!showingTranscriptions)
+            if !showingTranscriptions {
+                detailContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .background(STheme.windowBg)
+            }
+        }
+    }
+
     /// Content for the currently-selected sidebar tab.
     @ViewBuilder private var detailContent: some View {
         switch selectedTab {
@@ -1633,6 +1668,7 @@ struct SettingsView: View {
         case .output:    transcriptionSettings
         case .rules:     AppContextSettingsView(viewModel: viewModel)
         case .history:   storageSettings
+        case .transcriptions: EmptyView()  // kept mounted by `detailStack`
         case .advanced:  advancedSettings
         case .updates:   UpdatesView()
         case .feedback:  feedbackSettings
@@ -1748,19 +1784,23 @@ struct SettingsView: View {
                         .scaledFont(size: 12)
                         .foregroundColor(STheme.text)
                         .focused($sidebarSearchFocused)
-                    Text("⌘F")
-                        .scaledFont(size: 10, design: .monospaced)
-                        .foregroundColor(STheme.hint)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(STheme.controlBg))
+                    if selectedTab != .transcriptions {
+                        ShortcutBadge(text: "⌘F")
+                    }
                 }
                 .padding(.horizontal, 10).padding(.vertical, 6)
                 .background(RoundedRectangle(cornerRadius: 8).fill(STheme.inputBg))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(STheme.controlBorder, lineWidth: 1))
                 .padding(.bottom, 12)
                 .background(
-                    Button("") { sidebarSearchFocused = true }
-                        .keyboardShortcut("f", modifiers: .command)
+                    Button("") {
+                        if selectedTab == .transcriptions {
+                            NotificationCenter.default.post(name: .focusTranscriptionSearch, object: nil)
+                        } else {
+                            sidebarSearchFocused = true
+                        }
+                    }
+                    .keyboardShortcut("f", modifiers: .command)
                         .opacity(0)
                 )
 
@@ -1835,7 +1875,7 @@ struct SettingsView: View {
             // the window, cutting the sidebar's leading edge off (#138). Leading-aligned so the
             // overflow falls off the trailing edge, and clipped so it never draws over the
             // sidebar.
-            detailContent
+            detailStack
                 .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .clipped()
                 .background(STheme.windowBg)
@@ -1853,6 +1893,18 @@ struct SettingsView: View {
         }
         .tint(STheme.accent)
         .frame(minWidth: 720, idealWidth: 780, minHeight: 540, idealHeight: 600)
+        // The whole window takes a dropped audio file, as the old main window did, and a file
+        // dragged in from another tab brings up the list its transcription will land in.
+        .fileDropHandler()
+        .onChange(of: fileDrop.isDragging) { _, dragging in
+            if dragging { selectedTab = .transcriptions }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showSettingsPane)) { _ in
+            if selectedTab == .transcriptions { selectedTab = .dictation }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showTranscriptions)) { _ in
+            selectedTab = .transcriptions
+        }
         .onAppear {
             previousModelURL = viewModel.selectedModelURL
             launchAtLogin.refresh()
@@ -2489,6 +2541,26 @@ struct SettingsView: View {
 
             InsertionByAppSection(viewModel: viewModel)
         }
+    }
+
+    private var transcriptionsTab: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Transcriptions")
+                    .scaledFont(size: 16, weight: .bold)
+                    .foregroundColor(STheme.textBright)
+                Spacer()
+                Text("Search and manage everything you've dictated")
+                    .scaledFont(size: 11)
+                    .foregroundColor(STheme.hint)
+            }
+            .padding(.horizontal, 24).padding(.top, 16).padding(.bottom, 4)
+
+            ContentView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(STheme.windowBg)
     }
 
     private var storageSettings: some View {

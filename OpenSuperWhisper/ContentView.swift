@@ -394,12 +394,95 @@ class ContentViewModel: ObservableObject {
 struct ContentView: View {
     @StateObject private var viewModel = ContentViewModel()
     @StateObject private var permissionsManager = PermissionsManager()
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.openWindow) private var openSettingsWindow
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
     @State private var showDeleteConfirmation = false
     @State private var searchTask: Task<Void, Never>? = nil
+    @FocusState private var searchFocused: Bool
+
+    /// The record / stop button, pinned optically center of the single-row bar.
+    private var recordButton: some View {
+        Button(action: {
+            if viewModel.isRecording {
+                viewModel.startDecoding()
+            } else {
+                viewModel.startRecording()
+            }
+        }) {
+            if viewModel.state == .decoding || viewModel.state == .connecting || viewModel.transcriptionService.isLoading {
+                ProgressView()
+                    .scaleEffect(0.7)
+                    .frame(width: 34, height: 34)
+                    .contentTransition(.symbolEffect(.replace))
+            } else {
+                MainRecordButton(isRecording: viewModel.isRecording)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.transcriptionService.isLoading || viewModel.transcriptionService.isTranscribing || viewModel.transcriptionQueue.isProcessing || viewModel.state == .decoding || viewModel.transcriptionService.engineError != nil)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isRecording)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.state)
+    }
+
+    /// Shortcut + drag-and-drop hints.
+    private var hintColumn: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(currentShortcutDescription)
+                    .scaledFont(size: 10, weight: .regular)
+                    .foregroundColor(.secondary)
+                Text("to show mini recorder")
+                    .scaledFont(size: 10, weight: .regular)
+                    .foregroundColor(.secondary)
+            }
+            .lineLimit(1)
+
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down.doc.fill")
+                    .foregroundColor(.secondary)
+                    .imageScale(.small)
+                Text("Drop audio file here to transcribe")
+                    .scaledFont(size: 10, weight: .regular)
+                    .foregroundColor(.secondary)
+            }
+            .lineLimit(1)
+        }
+    }
+
+    /// Trash-everything control with its confirmation dialog.
+    @ViewBuilder private var deleteAllButton: some View {
+        if !viewModel.recordings.isEmpty {
+            Button(action: {
+                showDeleteConfirmation = true
+            }) {
+                Image(systemName: "trash")
+                    .scaledFont(size: 15, weight: .regular)
+                    .foregroundColor(.secondary)
+                    .frame(width: 32, height: 32)
+                    .background(STheme.controlBg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(STheme.controlBorder, lineWidth: 1)
+                    )
+                    .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+            .help("Delete all recordings")
+            .confirmationDialog(
+                "Delete All Recordings",
+                isPresented: $showDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete All", role: .destructive) {
+                    viewModel.deleteAllRecordings()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Are you sure you want to delete all recordings? This action cannot be undone.")
+            }
+            .interactiveDismissDisabled()
+        }
+    }
 
     private var currentShortcutDescription: String {
         let mouseButton = MouseButton(rawValue: AppPreferences.shared.mouseButtonHotkey) ?? .none
@@ -451,9 +534,17 @@ struct ContentView: View {
 
                         TextField("Search in transcriptions", text: $searchText)
                             .textFieldStyle(PlainTextFieldStyle())
+                            .focused($searchFocused)
                             .onChange(of: searchText) { _, newValue in
                                 performSearch(newValue)
                             }
+                            .onReceive(NotificationCenter.default.publisher(for: .focusTranscriptionSearch)) { _ in
+                                searchFocused = true
+                            }
+
+                        if searchText.isEmpty {
+                            ShortcutBadge(text: "⌘F")
+                        }
 
                         if !searchText.isEmpty {
                             Button(action: {
@@ -470,13 +561,14 @@ struct ContentView: View {
                         }
                     }
                     .padding(10)
-                    .background(ThemePalette.panelSurface(colorScheme))
+                    .background(STheme.inputBg)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(ThemePalette.panelBorder(colorScheme), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(STheme.controlBorder, lineWidth: 1)
                     )
-                    .cornerRadius(20)
-                    .padding([.horizontal, .top])
+                    .cornerRadius(8)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 12)
 
                     ScrollView(showsIndicators: false) {
                         if viewModel.recordings.isEmpty {
@@ -573,8 +665,9 @@ struct ContentView: View {
                                         .padding()
                                 }
                             }
-                            .padding(.horizontal)
+                            .padding(.horizontal, 24)
                             .padding(.top, 16)
+                            .padding(.bottom, 8)
                         }
                     }
                     .animation(.easeInOut(duration: 0.2), value: viewModel.recordings.count)
@@ -584,8 +677,8 @@ struct ContentView: View {
                             .fill(
                                 LinearGradient(
                                     gradient: Gradient(colors: [
-                                        ThemePalette.windowBackground(colorScheme).opacity(1),
-                                        ThemePalette.windowBackground(colorScheme).opacity(0)
+                                        STheme.windowBg.opacity(1),
+                                        STheme.windowBg.opacity(0)
                                     ]),
                                     startPoint: .top,
                                     endPoint: .bottom
@@ -593,31 +686,26 @@ struct ContentView: View {
                             )
                             .frame(height: 20)
                     }
+                    .overlay(alignment: .bottom) {
+                        // Soft fade-out under the bottom bar so scrolling cards are masked
+                        // by a gradient instead of being cut mid-line.
+                        Rectangle()
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        STheme.windowBg.opacity(0),
+                                        STheme.windowBg.opacity(0.85),
+                                        STheme.windowBg.opacity(1)
+                                    ]),
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .frame(height: 48)
+                            .allowsHitTesting(false)
+                    }
 
-                    VStack(spacing: 16) {
-                        Button(action: {
-                            if viewModel.isRecording {
-                                viewModel.startDecoding()
-                            } else {
-                                viewModel.startRecording()
-                            }
-                        }) {
-                            if viewModel.state == .decoding || viewModel.state == .connecting || viewModel.transcriptionService.isLoading {
-                                ProgressView()
-                                    .scaleEffect(1.0)
-                                    .frame(width: 48, height: 48)
-                                    .contentTransition(.symbolEffect(.replace))
-                            } else {
-                                MainRecordButton(isRecording: viewModel.isRecording)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(viewModel.transcriptionService.isLoading || viewModel.transcriptionService.isTranscribing || viewModel.transcriptionQueue.isProcessing || viewModel.state == .decoding || viewModel.transcriptionService.engineError != nil)
-                        .padding(.top, 24)
-                        .padding(.bottom, 16)
-                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isRecording)
-                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.state)
-
+                    VStack(spacing: 10) {
                         if let engineError = viewModel.transcriptionService.engineError {
                             HStack(spacing: 6) {
                                 Image(systemName: "exclamationmark.triangle.fill")
@@ -652,94 +740,26 @@ struct ContentView: View {
                             .animation(.easeInOut, value: viewModel.errorMessage)
                         }
 
-                        // Нижняя панель с подсказкой и кнопками управления
-                        HStack(alignment: .bottom) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                // Подсказка о шорткате
-                                HStack(spacing: 6) {
-                                    Text(currentShortcutDescription)
-                                        .scaledFont(size: 10, weight: .regular)
-                                        .foregroundColor(.secondary)
-                                    Text("to show mini recorder")
-                                        .scaledFont(size: 10, weight: .regular)
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding(.leading, 4)
-
-                                // Подсказка о drag-n-drop
-                                HStack(spacing: 6) {
-                                    Image(systemName: "arrow.down.doc.fill")
-                                        .foregroundColor(.secondary)
-                                        .imageScale(.medium)
-                                    Text("Drop audio file here to transcribe")
-                                        .scaledFont(size: 10, weight: .regular)
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding(.leading, 4)
-                            }
-
-                            Spacer()
-
+                        // Two equal flexible sides keep the button centred, and the hints truncate
+                        // rather than run under it (long translations, large text sizes).
+                        HStack(alignment: .center, spacing: 12) {
+                            hintColumn
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            recordButton
                             HStack(spacing: 12) {
                                 MicrophonePickerIconView(microphoneService: viewModel.microphoneService)
-                                
-                                if !viewModel.recordings.isEmpty {
-                                    Button(action: {
-                                        showDeleteConfirmation = true
-                                    }) {
-                                        Image(systemName: "trash")
-                                            .scaledFont(size: 15, weight: .regular)
-                                            .foregroundColor(.secondary)
-                                            .frame(width: 32, height: 32)
-                                            .background(ThemePalette.panelSurface(colorScheme))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 8)
-                                                    .stroke(ThemePalette.panelBorder(colorScheme), lineWidth: 1)
-                                            )
-                                            .cornerRadius(8)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .help("Delete all recordings")
-                                    .confirmationDialog(
-                                        "Delete All Recordings",
-                                        isPresented: $showDeleteConfirmation,
-                                        titleVisibility: .visible
-                                    ) {
-                                        Button("Delete All", role: .destructive) {
-                                            viewModel.deleteAllRecordings()
-                                        }
-                                        Button("Cancel", role: .cancel) {}
-                                    } message: {
-                                        Text("Are you sure you want to delete all recordings? This action cannot be undone.")
-                                    }
-                                    .interactiveDismissDisabled()
-                                }
-                                
-                                Button(action: {
-                                    openSettingsWindow(id: "settings")
-                                }) {
-                                    Image(systemName: "gear")
-                                        .scaledFont(size: 15, weight: .regular)
-                                        .foregroundColor(.secondary)
-                                        .frame(width: 32, height: 32)
-                                        .background(ThemePalette.panelSurface(colorScheme))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(ThemePalette.panelBorder(colorScheme), lineWidth: 1)
-                                        )
-                                        .cornerRadius(8)
-                                }
-                                .buttonStyle(.plain)
-                                .help("Settings")
+                                deleteAllButton
                             }
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                         }
                     }
-                    .padding()
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 14)
                 }
             }
         }
-        .frame(minWidth: 400, idealWidth: 400)
-        .background(ThemePalette.windowBackground(colorScheme))
+        .frame(maxWidth: .infinity)
+        .background(STheme.windowBg)
         .onAppear {
             viewModel.loadInitialData()
         }
@@ -786,10 +806,6 @@ struct ContentView: View {
                 }
                 .ignoresSafeArea()
             }
-        }
-        .fileDropHandler()
-        .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
-            openSettingsWindow(id: "settings")
         }
         .onChange(of: viewModel.shouldClearSearch) { _, shouldClear in
             if shouldClear {
@@ -838,7 +854,6 @@ struct PermissionRow: View {
     let title: String
     let description: String
     let action: () -> Void
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -864,7 +879,7 @@ struct PermissionRow: View {
                 .foregroundColor(.secondary)
         }
         .padding()
-        .background(ThemePalette.panelSurface(colorScheme))
+        .background(STheme.controlBg)
         .cornerRadius(10)
     }
 }
@@ -906,7 +921,6 @@ struct RecordingRow: View {
     }
     @State private var showTranscription = false
     @State private var isHovered = false
-    @Environment(\.colorScheme) private var colorScheme
 
     private var isPlaying: Bool {
         audioRecorder.isPlaying && audioRecorder.currentlyPlayingURL == recording.url
@@ -945,76 +959,36 @@ struct RecordingRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if isPending && !isRegenerating {
-                VStack(alignment: .leading, spacing: 4) {
-                    if let sourceFileName = recording.sourceFileName {
-                        Text(sourceFileName)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundColor(.primary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    
-                    HStack(spacing: 6) {
-                        if recording.status == .pending {
-                            Image(systemName: "clock")
-                                .scaledFont(size: 10, weight: .regular)
-                                .foregroundColor(.secondary)
-                        } else {
-                           
-                            ZStack {
-                                Circle()
-                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 2)
-                                
-                                Circle()
-                                    .trim(from: 0, to: CGFloat(recording.progress))
-                                    .stroke(Color.secondary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                                    .rotationEffect(.degrees(-90))
-                                    .animation(.linear(duration: 0.1), value: recording.progress)
-                            }
-                            .frame(width: 16, height: 16)
+                if let sourceFileName = recording.sourceFileName {
+                    Text(sourceFileName)
+                        .scaledFont(size: 12, weight: .medium)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 9)
+                }
+            }
 
-                            Text("\(Int(recording.progress * 100))%")
-                                .font(.caption.monospacedDigit())
-                                .foregroundColor(.secondary)
-                                .contentTransition(.numericText())
-                                .animation(.linear(duration: 0.1), value: recording.progress)
-
-                            processingElapsed
-                        }
-                        
-                        Text(statusText)
-                            .scaledFont(size: 10, weight: .regular)
-                            .foregroundColor(.secondary)
-                        
-                        Spacer()
-                    }
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
-
+            if recording.status == .failed {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .scaledFont(size: 10, weight: .regular)
+                        .foregroundColor(.red)
+                    Text("Transcription failed")
+                        .scaledFont(size: 10, weight: .regular)
+                        .foregroundColor(.red)
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 8)
-            }
-            
-            if recording.status == .failed {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .scaledFont(size: 10, weight: .regular)
-                            .foregroundColor(.red)
-                        Text("Transcription failed")
-                            .scaledFont(size: 10, weight: .regular)
-                            .foregroundColor(.red)
-                    }
-                    
-                    if !recording.transcription.isEmpty {
-                        Text(recording.transcription)
-                            .scaledFont(size: 10, weight: .regular)
-                            .foregroundColor(.secondary)
-                    }
+                // What the engine managed before failing, if anything.
+                if !recording.transcription.isEmpty {
+                    Text(recording.transcription)
+                        .scaledFont(size: 10, weight: .regular)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 4)
                 }
-                .padding(.horizontal, 12)
-                .padding(.top, isPending && !isRegenerating ? 4 : 8)
             } else if !displayText.isEmpty {
                 ZStack(alignment: .topLeading) {
                     TranscriptionView(
@@ -1022,219 +996,210 @@ struct RecordingRow: View {
                         searchQuery: searchQuery,
                         isExpanded: $showTranscription
                     )
-                    
+
                     if isRegenerating {
                         ShimmerOverlay()
                             .transition(.opacity.animation(.easeInOut(duration: 0.3)))
                     }
                 }
-                .padding(.horizontal, 4)
-                .padding(.top, isPending && !isRegenerating ? 4 : 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.top, 8)
             } else if !isPending {
                 Text("No speech detected")
-                    .scaledFont(size: 13, weight: .regular)
+                    .scaledFont(size: 12, weight: .regular)
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 12)
                     .padding(.top, 8)
             }
 
-            Divider()
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-
+            // The actions share the footer with the metadata, on every kind of row: beside the
+            // text they re-wrapped it on hover, and a failed, queued or empty row had none.
             HStack(alignment: .center, spacing: 8) {
-                VStack(alignment: .leading, spacing: 3) {
-                    // Row 1: date (left) · time / duration / words (right).
-                    HStack(spacing: 8) {
-                        Text(recording.timestamp, style: .date)
-                            .scaledFont(size: 11, weight: .regular)
-                        Spacer(minLength: 8)
-                        HStack(spacing: 4) {
-                            Text(recording.timestamp, style: .time)
-                            Text("·")
-                            Text(TextUtil.formatDuration(recording.duration))
-                            Text("·")
-                            Text("^[\(TextUtil.wordCount(recording.transcription)) word](inflect: true)")
-                        }
-                        .scaledFont(size: 10, weight: .regular)
-                    }
-
-                    // Row 2: source app / site (left) · model used (right, cpu glyph).
-                    // Omitted when there's no metadata (older recordings, file imports).
-                    if sourceLabel != nil || recording.modelUsed != nil {
-                        HStack(spacing: 8) {
-                            if let sourceLabel {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "macwindow")
-                                    Text(sourceLabel)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                }
-                            }
-                            Spacer(minLength: 8)
-                            if let model = recording.modelUsed {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "cpu")
-                                    Text(model)
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
-                                }
-                                // Orange only when this transcription came from the remote
-                                // engine's local fallback (server was unreachable), so a
-                                // surprising result is easy to spot back in the history.
-                                .foregroundColor(recording.wasFallback ? .orange : .secondary)
-                                .help(recording.wasFallback
-                                      ? "Local fallback — the remote server was unreachable"
-                                      : "")
-                            }
-                        }
-                        .scaledFont(size: 10, weight: .regular)
-                    }
+                compactMetaLine
+                if isPending || isRegenerating {
+                    progressBadge
                 }
-                .foregroundColor(.secondary)
-                
-                if isRegenerating {
-                    Spacer()
-                        .frame(width: 2)
-                    HStack(spacing: 6) {
-                        if recording.status == .pending {
-                            Image(systemName: "clock")
-                                .scaledFont(size: 10, weight: .regular)
-                                .foregroundColor(.secondary)
-                        } else {
-                            ZStack {
-                                Circle()
-                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 2)
-                                
-                                Circle()
-                                    .trim(from: 0, to: CGFloat(recording.progress))
-                                    .stroke(Color.secondary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                                    .rotationEffect(.degrees(-90))
-                                    .animation(.linear(duration: 0.1), value: recording.progress)
-                            }
-                            .frame(width: 16, height: 16)
-
-                            Text("\(Int(recording.progress * 100))%")
-                                .font(.caption.monospacedDigit())
-                                .foregroundColor(.secondary)
-                                .contentTransition(.numericText())
-                                .animation(.linear(duration: 0.1), value: recording.progress)
-
-                            processingElapsed
-                        }
-                        
-                        Text(statusText)
-                            .scaledFont(size: 10, weight: .regular)
-                            .foregroundColor(.secondary)
-                    }
-                    .transition(.opacity)
-                
-                }
-
-                Spacer()
-
-                HStack(spacing: 16) {
-                    if !isPending && recording.status != .failed && (isHovered || isPlaying) {
-                        Button(action: {
-                            if isPlaying {
-                                audioRecorder.stopPlaying()
-                            } else {
-                                audioRecorder.playRecording(url: recording.url)
-                            }
-                        }) {
-                            Image(systemName: isPlaying ? "stop.circle.fill" : "play.circle.fill")
-                                .scaledFont(size: 20)
-                                .foregroundColor(isPlaying ? .red : ThemePalette.iconAccent(colorScheme))
-                                .contentTransition(.symbolEffect(.replace))
-                        }
-                        .buttonStyle(.plain)
-                        .transition(.opacity)
-
-                        Button(action: {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(
-                                recording.transcription, forType: .string
-                            )
-                        }) {
-                            Image(systemName: "doc.on.doc.fill")
-                                .scaledFont(size: 18)
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Copy entire text")
-                        .transition(.opacity)
-                    }
-
-                    if (recording.status == .completed || recording.status == .failed) && isHovered {
-                        // Two controls: the icon reruns with the current model; the visible
-                        // chevron opens a picker that reruns once with a specific model without
-                        // changing the default. The chevron is the discoverable affordance. (F3)
-                        HStack(spacing: 1) {
-                            Button(action: { onRegenerate(nil) }) {
-                                Image(systemName: "arrow.clockwise")
-                                    .scaledFont(size: 18)
-                                    .foregroundColor(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .help("Regenerate (current model)")
-
-                            Menu {
-                                Button("Current model") { onRegenerate(nil) }
-                                if !rerunModels.isEmpty {
-                                    Divider()
-                                    ForEach(rerunModels.indices, id: \.self) { i in
-                                        Button(rerunModels[i].displayName) { onRegenerate(rerunModels[i]) }
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: "chevron.down")
-                                    .scaledFont(size: 9, weight: .semibold)
-                                    .foregroundColor(.secondary)
-                            }
-                            .menuStyle(.button)
-                            .menuIndicator(.hidden)
-                            .buttonStyle(.plain)
-                            .fixedSize()
-                            .help("Regenerate with a specific model")
-                        }
-                        .transition(.opacity)
-                    }
-
-                    if isHovered || isPlaying || (isPending && !isRegenerating) || recording.status == .failed {
-                        Button(action: {
-                            if isPlaying {
-                                audioRecorder.stopPlaying()
-                            }
-                            onDelete()
-                        }) {
-                            Image(systemName: "trash.fill")
-                                .scaledFont(size: 18)
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .transition(.opacity)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.2), value: isHovered)
-                .animation(.easeInOut(duration: 0.2), value: isPlaying)
-                .animation(.easeInOut(duration: 0.2), value: isRegenerating)
+                hoverActions
+                    .fixedSize()
             }
-            .animation(.easeInOut(duration: 0.2), value: isRegenerating)
+            // Tall enough for the action icons, so the card keeps its height when they appear.
+            .frame(minHeight: 22)
             .padding(.horizontal, 12)
-            .padding(.bottom, 8)
-            .background(ThemePalette.cardBackground(colorScheme))
+            .padding(.top, isPending ? 5 : 7)
+            .padding(.bottom, 9)
         }
-        .background(ThemePalette.cardBackground(colorScheme))
+        .background(STheme.cardBg)
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(ThemePalette.cardBorder(colorScheme), lineWidth: 1)
+                .stroke(STheme.border, lineWidth: 1)
         )
         .onHover { hovering in
             isHovered = hovering
         }
-        .padding(.vertical, 4)
     }
+
+    /// Metadata condensed to one truncating line.
+    private var compactMetaLine: some View {
+        HStack(spacing: 5) {
+            Text(recording.timestamp, style: .date)
+            Text("·")
+            Text(recording.timestamp, style: .time)
+            Text("·")
+            Text(TextUtil.formatDuration(recording.duration))
+            Text("·")
+            Text("^[\(TextUtil.wordCount(recording.transcription)) word](inflect: true)")
+            if let sourceLabel {
+                Text("·")
+                Text(sourceLabel)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            if let model = recording.modelUsed {
+                Spacer(minLength: 8)
+                HStack(spacing: 3) {
+                    Image(systemName: "cpu")
+                    Text(model)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .foregroundColor(recording.wasFallback ? .orange : .secondary)
+                .help(recording.wasFallback
+                      ? "Local fallback — the remote server was unreachable"
+                      : "")
+            }
+        }
+        .scaledFont(size: 10, weight: .regular)
+        .foregroundColor(.secondary)
+        .lineLimit(1)
+    }
+
+    /// Live progress for the row being (re)transcribed: circle, %, elapsed, status.
+    @ViewBuilder private var progressBadge: some View {
+        HStack(spacing: 6) {
+            if recording.status == .pending {
+                Image(systemName: "clock")
+                    .scaledFont(size: 10, weight: .regular)
+                    .foregroundColor(.secondary)
+            } else {
+                ZStack {
+                    Circle()
+                        .stroke(Color.secondary.opacity(0.2), lineWidth: 2)
+
+                    Circle()
+                        .trim(from: 0, to: CGFloat(recording.progress))
+                        .stroke(Color.secondary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 0.1), value: recording.progress)
+                }
+                .frame(width: 16, height: 16)
+
+                Text("\(Int(recording.progress * 100))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundColor(.secondary)
+                    .contentTransition(.numericText())
+                    .animation(.linear(duration: 0.1), value: recording.progress)
+
+                processingElapsed
+            }
+
+            Text(statusText)
+                .scaledFont(size: 10, weight: .regular)
+                .foregroundColor(.secondary)
+        }
+        .transition(.opacity)
+    }
+
+    /// Hover-gated row actions (play / copy / regenerate / delete).
+    @ViewBuilder private var hoverActions: some View {
+        HStack(spacing: 14) {
+            if !isPending && recording.status != .failed && (isHovered || isPlaying) {
+                Button(action: {
+                    if isPlaying {
+                        audioRecorder.stopPlaying()
+                    } else {
+                        audioRecorder.playRecording(url: recording.url)
+                    }
+                }) {
+                    Image(systemName: isPlaying ? "stop.circle.fill" : "play.circle.fill")
+                        .scaledFont(size: 20)
+                        .foregroundColor(isPlaying ? .red : STheme.accent)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+
+                Button(action: {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(
+                        recording.transcription, forType: .string
+                    )
+                }) {
+                    Image(systemName: "doc.on.doc.fill")
+                        .scaledFont(size: 18)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Copy entire text")
+                .transition(.opacity)
+            }
+
+            if (recording.status == .completed || recording.status == .failed) && isHovered {
+                // Two controls: the icon reruns with the current model; the visible
+                // chevron opens a picker that reruns once with a specific model without
+                // changing the default. The chevron is the discoverable affordance. (F3)
+                HStack(spacing: 1) {
+                    Button(action: { onRegenerate(nil) }) {
+                        Image(systemName: "arrow.clockwise")
+                            .scaledFont(size: 18)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Regenerate (current model)")
+
+                    Menu {
+                        Button("Current model") { onRegenerate(nil) }
+                        if !rerunModels.isEmpty {
+                            Divider()
+                            ForEach(rerunModels.indices, id: \.self) { i in
+                                Button(rerunModels[i].displayName) { onRegenerate(rerunModels[i]) }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .scaledFont(size: 9, weight: .semibold)
+                            .foregroundColor(.secondary)
+                    }
+                    .menuStyle(.button)
+                    .menuIndicator(.hidden)
+                    .buttonStyle(.plain)
+                    .fixedSize()
+                    .help("Regenerate with a specific model")
+                }
+                .transition(.opacity)
+            }
+
+            if isHovered || isPlaying || (isPending && !isRegenerating) || recording.status == .failed {
+                Button(action: {
+                    if isPlaying {
+                        audioRecorder.stopPlaying()
+                    }
+                    onDelete()
+                }) {
+                    Image(systemName: "trash.fill")
+                        .scaledFont(size: 18)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: isHovered)
+        .animation(.easeInOut(duration: 0.2), value: isPlaying)
+        .animation(.easeInOut(duration: 0.2), value: isRegenerating)
+    }
+
 }
 
 struct ShimmerOverlay: View {
@@ -1276,8 +1241,7 @@ struct TranscriptionView: View {
     let transcribedText: String
     let searchQuery: String
     @Binding var isExpanded: Bool
-    @Environment(\.colorScheme) private var colorScheme
-    
+
     @State private var highlightedAttributedString: AttributedString?
     @State private var computeTask: Task<Void, Never>?
     
@@ -1353,16 +1317,17 @@ struct TranscriptionView: View {
                         Button(action: { isExpanded.toggle() }) {
                             highlightedText
                                 .scaledFont(size: 13, weight: .regular)
-                                .lineLimit(3)
+                                .lineLimit(2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .textSelection(.enabled)
                                 .foregroundColor(.primary)
                         }
                         .buttonStyle(.plain)
                     } else {
+                        // No "Show more" below 150 characters, so no line limit either: a short
+                        // text that needs a third line in a narrow pane would be cut for good.
                         highlightedText
                             .scaledFont(size: 13, weight: .regular)
-                            .lineLimit(3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                     }
@@ -1376,7 +1341,7 @@ struct TranscriptionView: View {
                         Text(isExpanded ? "Show less" : "Show more")
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     }
-                    .foregroundColor(ThemePalette.linkText(colorScheme))
+                    .foregroundColor(STheme.accent)
                     .scaledFont(size: 10, weight: .regular)
                 }
                 .padding(.horizontal, 8)
@@ -1401,8 +1366,7 @@ struct TranscriptionView: View {
 struct MicrophonePickerIconView: View {
     @ObservedObject var microphoneService: MicrophoneService
     @State private var showMenu = false
-    @Environment(\.colorScheme) private var colorScheme
-    
+
     private var builtInMicrophones: [MicrophoneService.AudioDevice] {
         microphoneService.availableMicrophones.filter { $0.isBuiltIn }
     }
@@ -1419,10 +1383,10 @@ struct MicrophonePickerIconView: View {
                 .scaledFont(size: 15, weight: .regular)
                 .foregroundColor(.secondary)
                 .frame(width: 32, height: 32)
-                .background(ThemePalette.panelSurface(colorScheme))
+                .background(STheme.controlBg)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(ThemePalette.panelBorder(colorScheme), lineWidth: 1)
+                        .stroke(STheme.controlBorder, lineWidth: 1)
                 )
                 .cornerRadius(8)
         }
@@ -1507,10 +1471,10 @@ struct MainRecordButton: View {
                     endPoint: .bottomTrailing
                 )
             )
-            .frame(width: 48, height: 48)
+            .frame(width: 34, height: 34)
             .shadow(
                 color: isRecording ? .red.opacity(0.5) : buttonColor.opacity(0.3),
-                radius: 12,
+                radius: 6,
                 x: 0,
                 y: 0
             )
@@ -1534,48 +1498,10 @@ struct MainRecordButton: View {
 }
 
 enum ThemePalette {
-    static func windowBackground(_ scheme: ColorScheme) -> Color {
-        scheme == .dark
-            ? Color(NSColor.underPageBackgroundColor)
-            : .white
-    }
-
-    static func panelSurface(_ scheme: ColorScheme) -> Color {
-        scheme == .dark
-            ? Color.gray.opacity(0.1)
-            : Color(red: 0.95, green: 0.96, blue: 0.98)
-    }
-
-    static func panelBorder(_ scheme: ColorScheme) -> Color {
-        scheme == .dark
-            ? Color.gray.opacity(0.2)
-            : Color(red: 0.86, green: 0.88, blue: 0.92)
-    }
-
-    static func cardBackground(_ scheme: ColorScheme) -> Color {
-        scheme == .dark
-            ? Color(NSColor.controlBackgroundColor)
-            : Color.white
-    }
-
-    static func cardBorder(_ scheme: ColorScheme) -> Color {
-        scheme == .dark
-            ? Color(NSColor.separatorColor)
-            : Color(red: 0.86, green: 0.88, blue: 0.92)
-    }
-
     static func recordButtonBase(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? .white
             : Color(red: 0.35, green: 0.60, blue: 0.92)
-    }
-
-    static func iconAccent(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? .accentColor : .primary
-    }
-
-    static func linkText(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? .blue : .primary
     }
 }
 
