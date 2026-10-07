@@ -3040,6 +3040,15 @@ struct OnboardingUnifiedModels {
     /// ladder and is not one: all three are large-v3-turbo, and someone who picked "Medium"
     /// expecting the medium model got a compressed large instead.
     static let availableModels = [
+        // First, and preselected wherever it speaks the language (`OnboardingViewModel`): faster
+        // than Whisper and, in its 25 languages, more accurate. It replaces v3 here, which stays
+        // in the engine settings for anyone who already has it.
+        OnboardingUnifiedModel(
+            name: "Parakeet Ultra",
+            isDownloaded: false,
+            description: "Fastest processing and most accurate, 614 MB",
+            type: .parakeet(version: "ultra")
+        ),
         OnboardingUnifiedModel(
             name: "Whisper Large v3 Turbo",
             isDownloaded: false,
@@ -3048,14 +3057,6 @@ struct OnboardingUnifiedModels {
                 url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin?download=true")!,
                 size: 1624
             )
-        ),
-        // Ultra in v3's place: the same 25 languages at the same speed, more accurate in all of
-        // them. v3 stays in the engine settings for anyone who already has it.
-        OnboardingUnifiedModel(
-            name: "Parakeet Ultra",
-            isDownloaded: false,
-            description: "Fastest processing and most accurate, 614 MB",
-            type: .parakeet(version: "ultra")
         ),
         OnboardingUnifiedModel(
             name: "Parakeet v2",

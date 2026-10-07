@@ -18,6 +18,7 @@ class OnboardingViewModel: ObservableObject {
     @Published var selectedLanguage: String {
         didSet {
             AppPreferences.shared.whisperLanguage = selectedLanguage
+            suggestDefaultModel()
         }
     }
     
@@ -86,6 +87,29 @@ class OnboardingViewModel: ObservableObject {
         
         if selectedModelId == nil, let firstDownloaded = unifiedModels.first(where: { $0.isDownloaded }) {
             selectedModelId = firstDownloaded.id
+        }
+        suggestDefaultModel()
+    }
+
+    /// With nothing downloaded yet, preselects Parakeet Ultra, or Whisper when Ultra does not
+    /// speak the chosen language. Follows the language picker until a model is on disk; a model
+    /// the user already has is never second-guessed.
+    private func suggestDefaultModel() {
+        guard !remoteSelected, !unifiedModels.contains(where: { $0.isDownloaded }) else { return }
+        guard let model = unifiedModels.first(where: { Self.isDefaultCandidate($0, language: selectedLanguage) })
+        else { return }
+        selectModel(model)
+    }
+
+    static func isDefaultCandidate(_ model: OnboardingUnifiedModel, language: String) -> Bool {
+        switch model.type {
+        case .parakeet(let version):
+            return language == "auto" || EngineCapabilities.supportedLanguages(
+                engine: "fluidaudio", fluidAudioModelVersion: version).contains(language)
+        case .whisper:
+            return true
+        case .senseVoice:
+            return false
         }
     }
     
