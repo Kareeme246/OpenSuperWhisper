@@ -90,7 +90,7 @@ class OnboardingViewModel: ObservableObject {
     }
     
     func isFluidAudioModelDownloaded(version: String) -> Bool {
-        let asrVersion: AsrModelVersion = version == "v2" ? .v2 : .v3
+        let asrVersion = AsrModelVersion(preference: version)
         let cacheDirectory = AsrModels.defaultCacheDirectory(for: asrVersion)
         return AsrModels.modelsExist(at: cacheDirectory, version: asrVersion)
     }
@@ -262,7 +262,7 @@ class OnboardingViewModel: ObservableObject {
         
         downloadTask = Task {
             do {
-                let asrVersion: AsrModelVersion = version == "v2" ? .v2 : .v3
+                let asrVersion = AsrModelVersion(preference: version)
                 
                 guard !Task.isCancelled else {
                     await MainActor.run {
