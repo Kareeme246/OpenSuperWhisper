@@ -3049,16 +3049,12 @@ struct OnboardingUnifiedModels {
                 size: 1624
             )
         ),
-        OnboardingUnifiedModel(
-            name: "Parakeet v3",
-            isDownloaded: false,
-            description: "Fastest processing and accurate",
-            type: .parakeet(version: "v3")
-        ),
+        // Ultra in v3's place: the same 25 languages at the same speed, more accurate in all of
+        // them. v3 stays in the engine settings for anyone who already has it.
         OnboardingUnifiedModel(
             name: "Parakeet Ultra",
             isDownloaded: false,
-            description: "Fast, and the most accurate Parakeet, 614 MB",
+            description: "Fastest processing and most accurate, 614 MB",
             type: .parakeet(version: "ultra")
         ),
         OnboardingUnifiedModel(
