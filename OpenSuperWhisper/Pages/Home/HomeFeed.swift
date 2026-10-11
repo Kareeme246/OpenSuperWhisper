@@ -140,7 +140,7 @@ private struct FeedEmptyState<Action: View>: View {
     @ViewBuilder var action: () -> Action
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .center, spacing: 10) {
             Image(systemName: symbol)
                 .scaledFont(size: 22)
                 .foregroundColor(STheme.accent)
@@ -153,12 +153,13 @@ private struct FeedEmptyState<Action: View>: View {
             detail
                 .scaledFont(size: 14)
                 .foregroundColor(STheme.hint)
+                .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 440, alignment: .leading)
+                .frame(maxWidth: 440)
             action()
                 .padding(.top, 4)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .center)
         .padding(.vertical, 32)
     }
 }
