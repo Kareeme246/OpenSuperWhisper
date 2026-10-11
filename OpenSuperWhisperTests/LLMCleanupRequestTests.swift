@@ -93,8 +93,8 @@ enum ShippedCleanupPrompts {
 /// outcome. Both backends talk to servers the user runs or pays for, so the request shape is a
 /// contract with those servers; and `process` must hand back the transcription untouched on
 /// every failure, because its result is what gets pasted. Prompt assembly and the length guard
-/// arithmetic are covered by `AppContextFormattingTests`; short custom prompts are used here so
-/// these tests only see the transport.
+/// arithmetic are covered by `AppContextFormattingTests`, the echo check by `PromptEchoGuardTests`;
+/// short custom prompts are used here so these tests only see the transport.
 final class LLMCleanupRequestTests: XCTestCase {
 
     private static let endpoint = "http://\(LLMStubProtocol.host):11434"
@@ -342,6 +342,50 @@ final class LLMCleanupRequestTests: XCTestCase {
                            "the same reply fails the guard the built-in backend applies")
         }
         XCTAssertTrue(BuiltInLlamaBackend.shared.enforcesLengthRatio)
+    }
+
+    // MARK: - Prompt echo
+
+    /// #147: with next to nothing to correct, the model answered with the closing half of its own
+    /// prompt, and that was pasted in place of the dictation. On every backend, a reply that
+    /// repeats the prompt is a failed cleanup and the transcription comes back.
+    func testAReplyThatRepeatsThePromptReturnsTheInput() async {
+        prefs.aiPostProcessingPrompt = ShippedCleanupPrompts.opening
+        prefs.aiPostProcessingClosing = ShippedCleanupPrompts.closing
+        let dictation = "Okay"
+        let echoes = [
+            ShippedCleanupPrompts.closing,
+            "Output only the corrected text: no preamble, no explanation, no commentary.",
+            "Write your output in the same language as the transcription. Okay.",
+        ]
+        for echo in echoes {
+            for (backend, reply) in [("ollama", ollamaReply(echo)), ("remote", remoteReply(echo))] {
+                prefs.aiBackend = backend
+                LLMStubProtocol.reset(replying: reply)
+
+                let result = await LLMPostProcessor.process(dictation, bundleID: nil)
+
+                XCTAssertEqual(result, dictation, "\(backend): \(echo)")
+                XCTAssertEqual(LLMStubProtocol.requests.count, 1, "\(backend): \(echo)")
+            }
+        }
+    }
+
+    /// A dictation that quotes the prompt is corrected like any other: the words came from the
+    /// user, not from the instructions.
+    func testADictationThatQuotesThePromptIsCorrected() async {
+        prefs.aiPostProcessingPrompt = ShippedCleanupPrompts.opening
+        prefs.aiPostProcessingClosing = ShippedCleanupPrompts.closing
+        let dictation = "tell it to write your output in the same language as the transcription please"
+        let cleaned = "Tell it to \"write your output in the same language as the transcription\", please."
+        for (backend, reply) in [("ollama", ollamaReply(cleaned)), ("remote", remoteReply(cleaned))] {
+            prefs.aiBackend = backend
+            LLMStubProtocol.reset(replying: reply)
+
+            let result = await LLMPostProcessor.process(dictation, bundleID: nil)
+
+            XCTAssertEqual(result, cleaned, backend)
+        }
     }
 
     /// The built-in backend with no model downloaded (the test storage root has none) is not

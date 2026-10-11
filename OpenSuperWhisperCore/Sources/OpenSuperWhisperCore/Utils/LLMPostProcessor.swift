@@ -9,9 +9,9 @@ public protocol LLMCleanupBackend {
     var isReady: Bool { get }
     /// Whether `LLMPostProcessor` should apply its output-length ratio check to this backend's
     /// output (see `passesLengthGuard`). True only for the small built-in model, which is the one
-    /// weak enough to answer the transcription instead of transforming it. Ollama/Remote keep the
-    /// original blank-output-only check, so a user who repurposed the instruction on a big model
-    /// (condensing, expanding) isn't second-guessed.
+    /// weak enough to answer the transcription instead of transforming it. Ollama/Remote only get
+    /// the blank-output and prompt-echo checks, so a user who repurposed the instruction on a big
+    /// model (condensing, expanding) isn't second-guessed.
     var enforcesLengthRatio: Bool { get }
     func generate(system: String, user: String) async throws -> String
 }
@@ -84,6 +84,12 @@ public enum LLMPostProcessor {
             // an active app profile relaxes its shrink floor because those rules condense on
             // purpose — see `passesLengthGuard`.
             guard !result.isEmpty else { return text }
+            // Every backend, whatever the input length: a model with next to nothing to correct
+            // can answer with its own instructions, which would then be pasted (#147).
+            if echoesPrompt(output: result, system: system, input: text) {
+                print("AI post-processing returned its own instructions, using the raw transcription")
+                return text
+            }
             if backend.enforcesLengthRatio,
                !passesLengthGuard(input: text, output: result, condensingAllowed: prof != nil) {
                 return text
@@ -272,6 +278,72 @@ public enum LLMPostProcessor {
         if input.count < 20 { return true }
         let ratio = Double(trimmed.count) / Double(input.count)
         return ratio >= (condensingAllowed ? 0.05 : 0.3) && ratio <= 3.0
+    }
+
+    /// One run this long, shared with the prompt and not dictated, is an echo. About seven English
+    /// words: a correction does not reproduce that much of an instruction by chance.
+    static let echoRunLength = 40
+    /// A terse echo ("Output only the corrected text.") never reaches `echoRunLength`, so a reply
+    /// is also measured in fragments this long, short enough for a three-word phrase.
+    static let echoFragmentLength = 12
+    /// Share of a reply covered by such fragments that makes it an echo rather than a correction
+    /// borrowing a few of the prompt's words. A correction of a dictation that quotes the prompt
+    /// with one word changed leaves about half of it covered, hence a high bar.
+    static let echoCoverageThreshold = 0.8
+
+    /// Whether `output` repeats the system prompt it was sent with instead of correcting `input`:
+    /// either a run of `echoRunLength` characters taken from the prompt, or a reply made mostly of
+    /// prompt fragments. Text the user dictated never counts, so quoting the prompt is safe.
+    ///
+    /// Compared after `echoNormalized`, so a reply that recased or repunctuated the instruction
+    /// still matches it, and against the whole prompt as sent, so the app rules and the
+    /// translation section are covered as well as the two halves.
+    static func echoesPrompt(output: String, system: String, input: String) -> Bool {
+        let reply = echoNormalized(output)
+        let prompt = echoNormalized(system)
+        let dictated = echoNormalized(input)
+
+        func echoedStarts(length: Int) -> [Int] {
+            guard reply.count >= length else { return [] }
+            let fromPrompt = windows(of: prompt, length: length)
+            let fromInput = windows(of: dictated, length: length)
+            return (0...(reply.count - length)).filter { start in
+                let window = String(reply[start..<start + length])
+                return fromPrompt.contains(window) && !fromInput.contains(window)
+            }
+        }
+
+        if !echoedStarts(length: echoRunLength).isEmpty { return true }
+
+        var covered = [Bool](repeating: false, count: reply.count)
+        for start in echoedStarts(length: echoFragmentLength) {
+            covered.replaceSubrange(start..<start + echoFragmentLength,
+                                    with: repeatElement(true, count: echoFragmentLength))
+        }
+        guard !covered.isEmpty else { return false }
+        return Double(covered.filter { $0 }.count) / Double(covered.count) >= echoCoverageThreshold
+    }
+
+    /// Case, accents, width and punctuation folded away, every run of anything else than letters,
+    /// marks and digits reduced to one space.
+    static func echoNormalized(_ text: String) -> [Character] {
+        let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                                  locale: nil)
+        var result: [Character] = []
+        for scalar in folded.unicodeScalars {
+            if CharacterSet.alphanumerics.contains(scalar) {
+                result.append(Character(scalar))
+            } else if let last = result.last, last != " " {
+                result.append(" ")
+            }
+        }
+        if result.last == " " { result.removeLast() }
+        return result
+    }
+
+    private static func windows(of characters: [Character], length: Int) -> Set<String> {
+        guard characters.count >= length else { return [] }
+        return Set((0...(characters.count - length)).map { String(characters[$0..<$0 + length]) })
     }
 
     // MARK: - Connection tests (settings "Test" button)
