@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// The single place that decides *how* a finished transcription reaches the focused app:
@@ -42,10 +43,11 @@ enum TranscriptInserter {
         // decision is made: which rule matched, which app it was resolved from, and which of the
         // two mechanisms ran. Logging it one layer down could only report the app in front right
         // now, which is not the one the rule came from once transcription has run in between.
-        func log(mechanism: String, chunks: Int, pause: useconds_t) {
+        func log(mechanism: String, chunks: Int, pause: useconds_t,
+                 pasteKeyCode: CGKeyCode? = nil) {
             TextInserter.logInsertion(payload: text, mechanism: mechanism,
                                       dictatedInto: targetBundleID, rule: rule,
-                                      chunks: chunks, pause: pause)
+                                      chunks: chunks, pause: pause, pasteKeyCode: pasteKeyCode)
         }
 
         if pasting {
@@ -55,7 +57,8 @@ enum TranscriptInserter {
             // One event, so there is nothing to pace and nothing to chunk. Logged all the same:
             // a report has to be able to say which mechanism ran, and a paste that logged
             // nothing looked exactly like an insertion that never happened.
-            log(mechanism: "paste", chunks: 1, pause: 0)
+            log(mechanism: "paste", chunks: 1, pause: 0,
+                pasteKeyCode: KeyboardLayoutProvider.shared.pasteKeyCode())
             if prefs.autoCopyToClipboard {
                 Diag.measure("TextInserter.paste") { TextInserter.paste() }
             } else {

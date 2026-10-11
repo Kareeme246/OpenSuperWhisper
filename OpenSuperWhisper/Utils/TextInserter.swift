@@ -95,15 +95,19 @@ enum TextInserter {
     ///   - rule: what the rule lookup decided, so a rule that matched can be told apart from one
     ///     that silently did not. A typo in a bundle identifier and no rule at all otherwise
     ///     produce the same line, and that is the first question anyone reading #85 now asks.
+    ///   - pasteKeyCode: the key posted with ⌘ when pasting, which depends on the keyboard layout
+    ///     (#161). A paste that lands as some other shortcut is answered by this number alone.
     static func insertionLogLine(app: String, dictatedInto: String?, rule: String,
                                  mechanism: String, targetLength: Int?, caret: Int?,
-                                 payload: Int, chunks: Int, pause: useconds_t) -> String {
+                                 payload: Int, chunks: Int, pause: useconds_t,
+                                 pasteKeyCode: CGKeyCode? = nil) -> String {
         let gaps = max(chunks - 1, 0)
         let target = targetLength.map(String.init) ?? "unavailable"
         let caretText = caret.map(String.init) ?? "unavailable"
+        let key = pasteKeyCode.map { String(format: " key=0x%02X", $0) } ?? ""
         return "insert via=\(mechanism) app=\(app) dictated-into=\(dictatedInto ?? "unknown") "
             + "rule=\(rule) target=\(target) caret=\(caretText) payload=\(payload) "
-            + "chunks=\(chunks) pause=\(pause)us/gap total=\(UInt(pause) * UInt(gaps))us"
+            + "chunks=\(chunks) pause=\(pause)us/gap total=\(UInt(pause) * UInt(gaps))us\(key)"
     }
 
     /// How a rule reads on the diagnostic line.
@@ -122,7 +126,8 @@ enum TextInserter {
     /// Logging from inside `type()` could only see the app in front right now, which is not the
     /// one the decision was made for.
     static func logInsertion(payload: String, mechanism: String, dictatedInto: String?,
-                             rule: AppInsertionRule?, chunks: Int, pause: useconds_t) {
+                             rule: AppInsertionRule?, chunks: Int, pause: useconds_t,
+                             pasteKeyCode: CGKeyCode? = nil) {
         guard Diag.isEnabled else { return }
         let metrics = FocusUtils.focusedTextMetrics()
         Diag.mark(insertionLogLine(
@@ -134,7 +139,8 @@ enum TextInserter {
             caret: metrics?.caret,
             payload: payload.count,
             chunks: chunks,
-            pause: pause))
+            pause: pause,
+            pasteKeyCode: pasteKeyCode))
     }
 
     /// - Parameter paceMilliseconds: gap between chunks. Defaults to the global setting; a
