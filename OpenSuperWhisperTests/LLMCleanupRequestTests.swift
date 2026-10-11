@@ -388,6 +388,29 @@ final class LLMCleanupRequestTests: XCTestCase {
         }
     }
 
+    /// The shipped Terminal preset lists example conversions; dictating one of them must paste the
+    /// converted command, not the spoken words, even though the reply is a line of the prompt.
+    func testATerminalExampleIsConverted() async {
+        prefs.aiPostProcessingPrompt = ShippedCleanupPrompts.opening
+        prefs.aiPostProcessingClosing = ShippedCleanupPrompts.closing
+        prefs.appContextFormattingEnabled = true
+        prefs.appContextProfiles = AppContextProfile.defaultPresets
+        let conversions = [
+            ("cat readme dot md", "cat readme.md"),
+            ("git checkout dash b feature slash login", "git checkout -b feature/login"),
+        ]
+        for (dictation, command) in conversions {
+            for (backend, reply) in [("ollama", ollamaReply(command)), ("remote", remoteReply(command))] {
+                prefs.aiBackend = backend
+                LLMStubProtocol.reset(replying: reply)
+
+                let result = await LLMPostProcessor.process(dictation, bundleID: "com.apple.Terminal")
+
+                XCTAssertEqual(result, command, "\(backend): \(dictation)")
+            }
+        }
+    }
+
     /// The built-in backend with no model downloaded (the test storage root has none) is not
     /// ready: nothing runs and the input comes back.
     func testBuiltInBackendWithoutAModelReturnsTheInput() async {

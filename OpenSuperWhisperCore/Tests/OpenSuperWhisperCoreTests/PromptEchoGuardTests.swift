@@ -66,6 +66,16 @@ final class PromptEchoGuardTests: CoreTestCase {
                    input: "hey", system: system)
     }
 
+    /// The Terminal preset is long and full of examples; its rules are still prompt text.
+    func testTheTerminalRulesAreAnEcho() {
+        let system = prompt(profile: .terminalPreset)
+        assertEcho("Keep commands and flags lowercase unless letters are clearly an uppercase key (a ticket prefix).",
+                   input: "ls", system: system)
+        assertEcho("Output only the converted text — no explanation, no surrounding quotes, no trailing period.",
+                   input: "git status", system: system)
+        assertEcho("Do not capitalize the start or add ending punctuation", input: "pwd", system: system)
+    }
+
     /// Recased, repunctuated, re-spaced: still the instruction.
     func testAnEchoSurvivesFormatting() {
         assertEcho("OUTPUT ONLY THE CORRECTED TEXT -- NO PREAMBLE / NO EXPLANATION / NO COMMENTARY",
@@ -114,6 +124,27 @@ final class PromptEchoGuardTests: CoreTestCase {
     func testACorrectedQuoteOfThePromptIsNotAnEcho() {
         assertNoEcho("Make sure you output only the corrected text.",
                      input: "make sure you output only corrected text")
+    }
+
+    /// A user trying the Terminal preset dictates its own examples, and the right conversion is
+    /// the example output, prompt text from end to end; every word of it was dictated.
+    func testTheTerminalExamplesAreNotEchoes() {
+        let system = prompt(profile: .terminalPreset)
+        assertNoEcho("cat readme.md", input: "cat readme dot md", system: system)
+        assertNoEcho("src/main.swift", input: "src slash main dot swift", system: system)
+        assertNoEcho("npm run --watch", input: "npm run dash dash watch", system: system)
+        assertNoEcho("git checkout -b feature/login", input: "git checkout dash b feature slash login", system: system)
+        assertNoEcho("cd src/app", input: "cd src slash app", system: system)
+        assertNoEcho("ENG-10516", input: "ENG dash one zero five one six", system: system)
+        assertNoEcho("git checkout -b ENG-10516 && npm run --watch",
+                     input: "git checkout dash b ENG dash one zero five one six ampersand ampersand npm run dash dash watch",
+                     system: system)
+    }
+
+    /// A mis-recognition fixed into a phrase the prompt happens to contain.
+    func testAProseFixMatchingThePromptIsNotAnEcho() {
+        assertNoEcho("Never explain what you did.", input: "never explained what you did")
+        assertNoEcho("You only fix its wording.", input: "you only fix it's wording")
     }
 
     /// Prose about corrections shares the prompt's vocabulary without repeating it.

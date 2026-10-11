@@ -290,38 +290,79 @@ public enum LLMPostProcessor {
     /// borrowing a few of the prompt's words. A correction of a dictation that quotes the prompt
     /// with one word changed leaves about half of it covered, hence a high bar.
     static let echoCoverageThreshold = 0.8
+    /// Share of a reply's words the user did not say before its fragment coverage counts. A
+    /// faithful cleanup reuses the dictated words, and when the prompt shows the same conversion
+    /// as an example (the Terminal preset's "cat readme dot md" → cat readme.md) its output is
+    /// prompt text from end to end; an echo brings in the prompt's own words.
+    static let echoNewWordShare = 0.5
 
     /// Whether `output` repeats the system prompt it was sent with instead of correcting `input`:
-    /// either a run of `echoRunLength` characters taken from the prompt, or a reply made mostly of
-    /// prompt fragments. Text the user dictated never counts, so quoting the prompt is safe.
+    /// either a run of `echoRunLength` characters taken from the prompt that holds a word the user
+    /// did not say, or a reply made mostly of prompt fragments and mostly of undictated words.
+    /// Text the user dictated never counts, so quoting the prompt is safe.
     ///
     /// Compared after `echoNormalized`, so a reply that recased or repunctuated the instruction
     /// still matches it, and against the whole prompt as sent, so the app rules and the
-    /// translation section are covered as well as the two halves.
+    /// translation section are covered as well as the two halves. That includes text a custom
+    /// prompt or app rule asks to insert verbatim: a sign-off of `echoRunLength` characters or
+    /// more ("End with: Best regards, …") reads as an echo, and the transcription is pasted
+    /// without it.
     static func echoesPrompt(output: String, system: String, input: String) -> Bool {
-        let reply = echoNormalized(output)
-        let prompt = echoNormalized(system)
         let dictated = echoNormalized(input)
+        let reply = EchoReply(echoNormalized(output), dictated: dictated)
+        let prompt = echoNormalized(system)
 
         func echoedStarts(length: Int) -> [Int] {
-            guard reply.count >= length else { return [] }
+            guard reply.characters.count >= length else { return [] }
             let fromPrompt = windows(of: prompt, length: length)
             let fromInput = windows(of: dictated, length: length)
-            return (0...(reply.count - length)).filter { start in
-                let window = String(reply[start..<start + length])
+            return (0...(reply.characters.count - length)).filter { start in
+                let window = String(reply.characters[start..<start + length])
                 return fromPrompt.contains(window) && !fromInput.contains(window)
             }
         }
 
-        if !echoedStarts(length: echoRunLength).isEmpty { return true }
+        if echoedStarts(length: echoRunLength).contains(where: {
+            reply.hasNewWord(in: $0..<$0 + echoRunLength)
+        }) { return true }
 
-        var covered = [Bool](repeating: false, count: reply.count)
+        guard reply.newWordShare >= echoNewWordShare else { return false }
+        var covered = [Bool](repeating: false, count: reply.characters.count)
         for start in echoedStarts(length: echoFragmentLength) {
             covered.replaceSubrange(start..<start + echoFragmentLength,
                                     with: repeatElement(true, count: echoFragmentLength))
         }
         guard !covered.isEmpty else { return false }
         return Double(covered.filter { $0 }.count) / Double(covered.count) >= echoCoverageThreshold
+    }
+
+    /// A normalised reply cut into words, each marked new when the dictation does not contain it.
+    private struct EchoReply {
+        let characters: [Character]
+        private let words: [(range: Range<Int>, isNew: Bool)]
+
+        init(_ characters: [Character], dictated: [Character]) {
+            self.characters = characters
+            let dictatedWords = Set(dictated.split(separator: " ").map { String($0) })
+            var words: [(range: Range<Int>, isNew: Bool)] = []
+            var start = 0
+            while start < characters.count {
+                let end = characters[start...].firstIndex(of: " ") ?? characters.count
+                words.append((start..<end, !dictatedWords.contains(String(characters[start..<end]))))
+                start = end + 1
+            }
+            self.words = words
+        }
+
+        var newWordShare: Double {
+            words.isEmpty ? 0 : Double(words.filter(\.isNew).count) / Double(words.count)
+        }
+
+        /// Overlapping rather than contained: scripts written without spaces make one word of a
+        /// whole clause, longer than any window.
+        func hasNewWord(in window: Range<Int>) -> Bool {
+            words.contains { $0.isNew && $0.range.overlaps(window) }
+        }
     }
 
     /// Case, accents, width and punctuation folded away, every run of anything else than letters,
