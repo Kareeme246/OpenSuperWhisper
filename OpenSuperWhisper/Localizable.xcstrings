@@ -11921,12 +11921,102 @@
         }
       }
     },
-    "Apple Intelligence (soon)": {
+    "Apple Intelligence": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apple Intelligence (bientôt)"
+            "value": "Apple Intelligence"
+          }
+        }
+      }
+    },
+    "Apple Intelligence doesn't support %@ yet, so the text is inserted without cleanup.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence ne prend pas encore en charge cette langue (%@), le texte est donc inséré sans nettoyage."
+          }
+        }
+      }
+    },
+    "Apple Intelligence is still downloading. Until then, the text is inserted without cleanup.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence est encore en cours de téléchargement. En attendant, le texte est inséré sans nettoyage."
+          }
+        }
+      }
+    },
+    "Apple Intelligence is turned off in System Settings. Until then, the text is inserted without cleanup.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence est désactivé dans les Réglages Système. En attendant, le texte est inséré sans nettoyage."
+          }
+        }
+      }
+    },
+    "Apple Intelligence needs macOS 26 on a Mac with Apple Silicon. Until then, the text is inserted without cleanup.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence nécessite macOS 26 sur un Mac Apple Silicon. En attendant, le texte est inséré sans nettoyage."
+          }
+        }
+      }
+    },
+    "Apple Intelligence · doesn't support %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence · %@ non pris en charge"
+          }
+        }
+      }
+    },
+    "Apple Intelligence · needs macOS 26 on Apple Silicon": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence · nécessite macOS 26 sur Apple Silicon"
+          }
+        }
+      }
+    },
+    "Apple Intelligence · still downloading": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence · téléchargement en cours"
+          }
+        }
+      }
+    },
+    "Apple Intelligence · turned off in System Settings": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence · désactivé dans les Réglages Système"
+          }
+        }
+      }
+    },
+    "Apple's on-device model, built into macOS.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le modèle d'Apple intégré à macOS, qui tourne sur ce Mac."
           }
         }
       }
@@ -14407,6 +14497,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rien ici pour l'instant. Ajoutez un nom que vous dites souvent, ou un mot que le modèle écrit toujours mal."
+          }
+        }
+      }
+    },
+    "Nothing to download. A dictation too long for the model is inserted without cleanup.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rien à télécharger. Une dictée trop longue pour le modèle est insérée sans nettoyage."
           }
         }
       }
@@ -17757,6 +17857,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "✓ Modèle prêt, tourne sur ce Mac"
+          }
+        }
+      }
+    },
+    "✓ Ready, runs on this Mac": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ Prêt, tourne sur ce Mac"
           }
         }
       }

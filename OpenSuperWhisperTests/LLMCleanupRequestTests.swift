@@ -371,6 +371,9 @@ final class LLMCleanupRequestTests: XCTestCase {
         prefs.aiBackend = "builtin"
         XCTAssertTrue(LLMPostProcessor.currentBackend() is BuiltInLlamaBackend)
 
+        prefs.aiBackend = "apple"
+        XCTAssertTrue(LLMPostProcessor.currentBackend() is AppleIntelligenceBackend)
+
         for value in ["ollama", "", "Remote", "lmstudio"] {
             prefs.aiBackend = value
             let ollama = try XCTUnwrap(LLMPostProcessor.currentBackend() as? OllamaBackend, value)
@@ -379,7 +382,9 @@ final class LLMCleanupRequestTests: XCTestCase {
         }
     }
 
-    /// A fresh install cleans up with Ollama on localhost, and a missing remote key is "".
+    /// A fresh install on a Mac without Apple Intelligence (see `ScratchPreferences`) cleans up
+    /// with Ollama on localhost, and a missing remote key is "". `AIBackendDefaultTests` covers
+    /// the Macs that have it.
     func testDefaultBackend() throws {
         scratch.wipe()
 

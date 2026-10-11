@@ -77,19 +77,26 @@ struct TextAICleanupGroup: View {
     // MARK: Engine
 
     private var engineRow: some View {
-        SettingRow("AI engine", hint: backendHint) {
+        let apple = AppPreferences.shared.appleIntelligenceAvailability
+        return SettingRow("AI engine", hint: backendHint) {
             SMenu(Text(backendLabel)) {
                 Picker("", selection: $viewModel.aiBackend) {
                     Text("Built-in (Qwen)").tag("builtin")
                     Text("Ollama").tag("ollama")
                     Text("Server").tag("remote")
+                    if apple == .available {
+                        Text(TextAIAppleIntelligence.menuItem(apple)).tag("apple")
+                    }
                 }
                 .pickerStyle(.inline)
                 .labelsHidden()
-                Divider()
-                // #158: shown so the choice is known to be coming, never selectable.
-                Button("Apple Intelligence (soon)") {}
-                    .disabled(true)
+                // Listed even where it can't run, greyed with the reason, so a Mac that is one
+                // setting away from it says which setting.
+                if apple != .available {
+                    Divider()
+                    Button(TextAIAppleIntelligence.menuItem(apple)) {}
+                        .disabled(true)
+                }
             }
         }
     }
@@ -98,6 +105,7 @@ struct TextAICleanupGroup: View {
         switch viewModel.aiBackend {
         case "builtin": return "Built-in (Qwen)"
         case "remote": return "Server"
+        case "apple": return "Apple Intelligence"
         default: return "Ollama"
         }
     }
@@ -106,6 +114,7 @@ struct TextAICleanupGroup: View {
         switch viewModel.aiBackend {
         case "builtin": return "A Qwen2.5 model running on this Mac."
         case "remote": return "Any OpenAI-compatible server."
+        case "apple": return "Apple's on-device model, built into macOS."
         default: return "Your local Ollama server."
         }
     }

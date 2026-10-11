@@ -504,11 +504,29 @@ final class AppPreferences {
     var aiPostProcessingEnabled: Bool
 
     /// Which LLM backend serves cleanup/formatting: "ollama" (external server), "builtin"
-    /// (embedded llama.cpp), or "remote" (any OpenAI-compatible /v1/chat/completions server —
-    /// Groq, OpenAI, LiteLLM…). Defaults to "ollama". Renamed from the older `aiProvider` key,
-    /// which `migrateAIProviderToBackend()` carries over for existing users.
-    @UserDefault(key: "aiBackend", defaultValue: "ollama")
-    var aiBackend: String
+    /// (embedded llama.cpp), "remote" (any OpenAI-compatible /v1/chat/completions server —
+    /// Groq, OpenAI, LiteLLM…), or "apple" (Apple's on-device model, macOS 26). Renamed from the
+    /// older `aiProvider` key, which `migrateAIProviderToBackend()` carries over for existing users.
+    ///
+    /// Until the user picks one, nothing is stored and the getter resolves the default on each
+    /// read (`LLMPostProcessor.effectiveBackend`): Apple Intelligence when this Mac can run it for
+    /// the dictation language, Ollama otherwise.
+    var aiBackend: String {
+        get {
+            LLMPostProcessor.effectiveBackend(stored: storedAIBackend,
+                                              appleIntelligence: appleIntelligenceAvailability)
+        }
+        set { storedAIBackend = newValue }
+    }
+
+    @OptionalUserDefault(key: "aiBackend")
+    private var storedAIBackend: String?
+
+    /// Apple Intelligence for the language dictations are cleaned up in: English once Whisper has
+    /// translated them, the transcription language otherwise.
+    var appleIntelligenceAvailability: AppleIntelligenceAvailability {
+        AppleIntelligence.availability(language: translateToEnglish ? "en" : whisperLanguage)
+    }
 
     @UserDefault(key: "aiOllamaEndpoint", defaultValue: "http://localhost:11434")
     var aiOllamaEndpoint: String

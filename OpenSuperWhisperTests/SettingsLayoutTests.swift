@@ -98,6 +98,7 @@ final class SettingsLayoutTests: XCTestCase {
         }
         AppNavigation.shared.closeSettings()
         AppNavigation.shared.page = .home
+        AppleIntelligence.replaceModelForTesting(nil)
         for key in ["aiPostProcessingEnabled", "appContextFormattingEnabled", "retentionMaxCountEnabled",
                     "retentionMaxCount", "textScale", "remoteServerURL", "remoteServerModel", "aiBackend",
                     "selectedEngine", "customDictionaryEnabled", "customDictionaryData",
@@ -127,10 +128,14 @@ final class SettingsLayoutTests: XCTestCase {
         /// Text & AI changes with the cleanup backend, Models with the engine.
         var backend = "builtin"
         var engine = "whisper"
+        /// Pinned so the Apple Intelligence fields render the same on every Mac: its ready line,
+        /// or the longer notice explaining why it can't run.
+        var appleIntelligence: AppleIntelligenceAvailability = .unsupportedMac
         var name: String {
             guard let rubric else { return page.rawValue }
             switch rubric {
             case .models: return "\(rubric.rawValue)-\(engine)"
+            case .textAndAI where backend == "apple": return "\(rubric.rawValue)-apple-\(appleIntelligence)"
             case .textAndAI: return "\(rubric.rawValue)-\(backend)"
             default: return rubric.rawValue
             }
@@ -141,7 +146,11 @@ final class SettingsLayoutTests: XCTestCase {
         let pages = AppPage.allCases.filter(\.isAvailable).map { Case(page: $0) }
         let rubrics = SettingsRubric.allCases.flatMap { rubric -> [Case] in
             switch rubric {
-            case .textAndAI: return ["builtin", "ollama", "remote"].map { Case(rubric: rubric, backend: $0) }
+            case .textAndAI:
+                return ["builtin", "ollama", "remote"].map { Case(rubric: rubric, backend: $0) }
+                    + [AppleIntelligenceAvailability.available, .turnedOff].map {
+                        Case(rubric: rubric, backend: "apple", appleIntelligence: $0)
+                    }
             case .models: return ["whisper", "remote"].map { Case(rubric: rubric, engine: $0) }
             default: return [Case(rubric: rubric)]
             }
@@ -157,6 +166,7 @@ final class SettingsLayoutTests: XCTestCase {
         for language in Self.languages {
             for testCase in Self.cases {
                 AppPreferences.shared.aiBackend = testCase.backend
+                AppleIntelligence.replaceModelForTesting(FixedOnDeviceModel(availability: testCase.appleIntelligence))
                 AppPreferences.shared.selectedEngine = testCase.engine
                 let name = "\(testCase.name)-\(language)-\(Int(size.width))-\(Int(scale * 100))"
                 SPaneStack.overflows.removeAll()
