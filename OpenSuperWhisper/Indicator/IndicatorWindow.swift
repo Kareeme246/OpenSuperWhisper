@@ -732,8 +732,9 @@ struct IndicatorWindow: View {
     private var glassBubbleContent: some View {
         let hasText = !streaming.confirmedText.isEmpty || !streaming.volatileText.isEmpty
         let showsCaption = viewModel.state == .recording && hasText
-        // The caption is drawn in the label's place, so a layout without the label still needs
-        // that slot while text streams in (the legacy bubble shows the caption regardless).
+        // The caption gets its own glass shape beside the pill, or the label's place when the pill
+        // has nothing else to show, so a layout without the label still needs that slot while
+        // text streams in (the legacy bubble shows the caption regardless).
         let center = showsCaption && !glassCenter.contains(.label) ? glassCenter + [.label] : glassCenter
         let viewModel = viewModel
         return RecordingBubble(
