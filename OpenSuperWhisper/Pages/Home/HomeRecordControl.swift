@@ -4,16 +4,14 @@ import UniformTypeIdentifiers
 import OpenSuperWhisperCore
 
 /// The floating control at the bottom of Home: the trigger on the left (opens the dictation
-/// settings), the big record button in the middle, Import on the right. The engine error and the
+/// settings), the big record button in the middle, Import on the right, with no backing behind
+/// the three. The engine error and the
 /// last transient error sit just above it.
 struct HomeRecordControl: View {
     @ObservedObject var viewModel: ContentViewModel
     @ObservedObject private var transcription = TranscriptionService.shared
     @ObservedObject private var queue = TranscriptionQueue.shared
     let trigger: HomeTriggerSummary?
-
-    /// The design's warm brown drop shadow (#493322 at 15 %).
-    private static let shadow = Color(red: 0x49 / 255, green: 0x33 / 255, blue: 0x22 / 255).opacity(0.15)
 
     var body: some View {
         VStack(spacing: 10) {
@@ -49,9 +47,6 @@ struct HomeRecordControl: View {
             }
             .help("Transcribe audio files")
         }
-        .padding(8)
-        .background(Capsule().fill(STheme.cardBg.opacity(0.94)).shadow(color: Self.shadow, radius: 22, y: 18))
-        .overlay(Capsule().stroke(STheme.border, lineWidth: 1))
     }
 
     @ViewBuilder private var triggerGlyph: some View {
@@ -193,8 +188,9 @@ private struct ControlSegment<Content: View>: View {
             .scaledFont(size: 11, weight: .semibold)
             .foregroundColor(STheme.textSecondary)
             .lineLimit(1)
-            .frame(minWidth: 94, minHeight: 60)
-            .padding(edge == .leading ? .trailing : .leading, Self.overlap + 14)
+            .frame(minWidth: 72, minHeight: 60)
+            .padding(.horizontal, 6)
+            .padding(edge == .leading ? .trailing : .leading, Self.overlap)
             .background(shape.fill(hovered ? STheme.border : STheme.fill))
             .contentShape(shape)
         }
