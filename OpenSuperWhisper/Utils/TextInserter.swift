@@ -171,10 +171,11 @@ enum TextInserter {
     /// Pastes the current clipboard into the focused app via a synthetic ⌘V. Universal — works in
     /// apps that ignore synthetic Unicode typing (Messages, Electron, …). The caller must have put
     /// the text on the clipboard first.
+    /// V is whichever key types "v" with ⌘ held in the current layout, not the US position (#161).
     static func paste() {
         guard let source = CGEventSource(stateID: .combinedSessionState) else { return }
         let cmdKey: CGKeyCode = 0x37 // kVK_Command
-        let vKey: CGKeyCode = 0x09   // kVK_ANSI_V
+        let vKey = KeyboardLayoutProvider.shared.pasteKeyCode()
         guard
             let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: cmdKey, keyDown: true),
             let vDown = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true),
