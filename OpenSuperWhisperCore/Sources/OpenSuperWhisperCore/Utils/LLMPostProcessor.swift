@@ -2,7 +2,8 @@ import Foundation
 
 /// A swappable backend that turns a (system, user) prompt pair into cleaned text.
 /// Implementations: `OllamaBackend` (external server), `BuiltInLlamaBackend` (embedded
-/// llama.cpp), and `RemoteBackend` (any OpenAI-compatible `/v1/chat/completions` server).
+/// llama.cpp), `RemoteBackend` (any OpenAI-compatible `/v1/chat/completions` server), and
+/// `AppleIntelligenceBackend` (Apple's on-device model, macOS 26).
 public protocol LLMCleanupBackend {
     /// Whether the backend can serve a request right now (e.g. the built-in model is downloaded
     /// and loaded). When false, `LLMPostProcessor` skips cleanup and returns the raw text.
@@ -31,18 +32,30 @@ public enum LLMStatus: Equatable, Sendable {
 }
 
 /// Cleans up a transcription with a local LLM, behind a single `process` entry point so the
-/// backend (Ollama, built-in llama.cpp, remote OpenAI-compatible) can be swapped without
+/// backend (Ollama, built-in llama.cpp, remote OpenAI-compatible, Apple Intelligence) can be swapped without
 /// touching the call sites.
 ///
 /// `process` never throws and never loses the transcription: if post-processing is disabled
 /// or the LLM call fails (server down, bad model, timeout, bad key…), it returns the input text.
 public enum LLMPostProcessor {
+    /// The backend someone gets when they never picked one: Apple Intelligence where it can run
+    /// (nothing to download or set up), Ollama, the long-standing default, everywhere else.
+    /// Resolved on every read rather than written to the preference, so a Mac that gains or loses
+    /// Apple Intelligence moves along with it until the user makes a choice of their own.
+    public static func effectiveBackend(stored: String?,
+                                        appleIntelligence: AppleIntelligenceAvailability) -> String {
+        if let stored { return stored }
+        return appleIntelligence == .available ? "apple" : "ollama"
+    }
+
     /// Selects the configured backend. Falls back to Ollama for any unknown value.
     public static func currentBackend() -> LLMCleanupBackend {
         let prefs = CoreAccess.preferences
         switch prefs.aiBackend {
         case "builtin":
             return BuiltInLlamaBackend.shared
+        case "apple":
+            return AppleIntelligenceBackend(model: AppleIntelligence.model)
         case "remote":
             return RemoteBackend(endpoint: prefs.aiRemoteEndpoint, model: prefs.aiRemoteModel,
                                   apiKey: prefs.aiRemoteAPIKey ?? "")
@@ -72,7 +85,10 @@ public enum LLMPostProcessor {
         else { return text }
 
         let backend = currentBackend()
-        guard backend.isReady else { return text }
+        guard backend.isReady else {
+            print("AI post-processing skipped, \(backend) is not ready: using the raw transcription")
+            return text
+        }
 
         do {
             // The transcription goes over as-is: everything the model is told lives in the system
