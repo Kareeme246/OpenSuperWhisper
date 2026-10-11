@@ -478,15 +478,41 @@ final class AppPreferences {
     var fillerWordsPattern: String
 
     /// Removes the configured filler words (when enabled) and tidies leftover whitespace.
-    /// An invalid regex is a no-op (`replacingOccurrences` returns the input unchanged).
+    /// The matching itself is in `stripFillerWords`.
     func cleanTranscription(_ text: String) -> String {
         guard removeFillerWords, !fillerWordsPattern.isEmpty else { return text }
-        let stripped = text.replacingOccurrences(
-            of: fillerWordsPattern, with: "",
-            options: [.regularExpression, .caseInsensitive])
-        return stripped
-            .replacingOccurrences(of: "\\s{2,}", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return Self.stripFillerWords(text, pattern: fillerWordsPattern)
+    }
+
+    /// Pure removal behind `cleanTranscription` (unit-tested directly). An invalid regex
+    /// removes nothing.
+    ///
+    /// It runs after the custom dictionary, so the text can already hold the line breaks a
+    /// "new paragraph" rule wrote. Those must come out exactly as they would with the option
+    /// off (#179): each match gives back the line breaks it consumed, since the default
+    /// pattern ends in `\s*` and a user's pattern may take whitespace from either side, and the
+    /// tidy-up only ever touches spaces and tabs.
+    static func stripFillerWords(_ text: String, pattern: String) -> String {
+        removingKeepingLineBreaks(pattern, from: text)
+            .replacingOccurrences(of: "[ \\t]{2,}", with: " ", options: .regularExpression)
+            // A filler removed at the edge of a line leaves its space behind there.
+            .replacingOccurrences(of: "[ \\t]+(?=[\\r\\n])|(?<=[\\r\\n]) +", with: "",
+                                  options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " \t"))
+    }
+
+    private static func removingKeepingLineBreaks(_ pattern: String, from text: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+        else { return text }
+        var result = ""
+        var cursor = text.startIndex
+        for match in regex.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let range = Range(match.range, in: text) else { continue }
+            result += text[cursor..<range.lowerBound]
+            result += text[range].filter(\.isNewline)
+            cursor = range.upperBound
+        }
+        return result + text[cursor...]
     }
 
     // AI post-processing (clean up the transcription with a local LLM). Opt-in.
