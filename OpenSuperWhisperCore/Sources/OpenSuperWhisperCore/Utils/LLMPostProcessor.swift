@@ -86,7 +86,13 @@ public enum LLMPostProcessor {
             guard !result.isEmpty else { return text }
             // Every backend, whatever the input length: a model with next to nothing to correct
             // can answer with its own instructions, which would then be pasted (#147).
-            if echoesPrompt(output: result, system: system, input: text) {
+            let shipped = shippedInstructions(generalCleanup: general,
+                                              generalPrompt: prefs.aiPostProcessingPrompt,
+                                              profile: prof,
+                                              closingPrompt: prefs.aiPostProcessingClosing,
+                                              translating: translating,
+                                              translationPrompt: prefs.aiPostProcessingTranslation)
+            if echoesPrompt(output: result, system: shipped, input: text) {
                 print("AI post-processing returned its own instructions, using the raw transcription")
                 return text
             }
@@ -172,6 +178,37 @@ public enum LLMPostProcessor {
     /// the guardrail would end up being the model's last word, which is exactly the position that
     /// decides how a small model behaves. An emptied half drops its section rather than being
     /// silently restored — replacing the shipped text wholesale is a supported use.
+    /// The parts of the system prompt the app itself wrote, as sent: the default halves, the
+    /// default translation section and the shipped app presets, each only when the user has not
+    /// rewritten it. The echo guard compares against these alone, so a reply that follows a
+    /// user's own instruction to insert fixed text is never mistaken for an echo; the price is
+    /// that an echo of a rewritten prompt goes undetected.
+    static func shippedInstructions(generalCleanup: Bool,
+                                    generalPrompt: String,
+                                    profile: AppContextProfile?,
+                                    closingPrompt: String,
+                                    translating: Bool,
+                                    translationPrompt: String) -> String {
+        func isShipped(_ text: String, _ shipped: [String]) -> Bool {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return shipped.contains { $0.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed }
+        }
+        var sections: [String] = []
+        if generalCleanup, isShipped(generalPrompt, [defaultInstruction]) {
+            sections.append(generalPrompt)
+        }
+        if translating, isShipped(translationPrompt, [defaultTranslationInstruction]) {
+            sections.append(translationPrompt)
+        }
+        if let profile, isShipped(profile.instructions, AppContextProfile.defaultPresets.map(\.instructions)) {
+            sections.append(profile.instructions)
+        }
+        if isShipped(closingPrompt, [defaultClosingInstruction]) {
+            sections.append(closingPrompt)
+        }
+        return sections.joined(separator: "\n\n")
+    }
+
     static func assembleSystemPrompt(generalCleanup: Bool,
                                      generalPrompt: String,
                                      profile: AppContextProfile?,
@@ -302,11 +339,10 @@ public enum LLMPostProcessor {
     /// Text the user dictated never counts, so quoting the prompt is safe.
     ///
     /// Compared after `echoNormalized`, so a reply that recased or repunctuated the instruction
-    /// still matches it, and against the whole prompt as sent, so the app rules and the
-    /// translation section are covered as well as the two halves. That includes text a custom
-    /// prompt or app rule asks to insert verbatim: a sign-off of `echoRunLength` characters or
-    /// more ("End with: Best regards, …") reads as an echo, and the transcription is pasted
-    /// without it.
+    /// still matches it. `process` passes only the instructions the app ships
+    /// (`shippedInstructions`), never text the user wrote: a custom prompt or app rule may ask for
+    /// a fixed sign-off ("End with: Best regards, …"), and that sign-off in the reply is the
+    /// prompt being followed, not echoed.
     static func echoesPrompt(output: String, system: String, input: String) -> Bool {
         let dictated = echoNormalized(input)
         let reply = EchoReply(echoNormalized(output), dictated: dictated)

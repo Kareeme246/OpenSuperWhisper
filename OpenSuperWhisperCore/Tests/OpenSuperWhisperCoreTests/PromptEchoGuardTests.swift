@@ -173,4 +173,39 @@ final class PromptEchoGuardTests: CoreTestCase {
         XCTAssertEqual(String(LLMPostProcessor.echoNormalized("mis-recognitions")), "mis recognitions")
         XCTAssertEqual(String(LLMPostProcessor.echoNormalized("ＡＢＣ１２３")), "abc123")
     }
+
+    // MARK: - Only the shipped instructions count
+
+    private func shipped(generalPrompt: String = LLMPostProcessor.defaultInstruction,
+                         profile: AppContextProfile? = nil,
+                         closingPrompt: String = LLMPostProcessor.defaultClosingInstruction,
+                         translating: Bool = false) -> String {
+        LLMPostProcessor.shippedInstructions(
+            generalCleanup: true, generalPrompt: generalPrompt, profile: profile,
+            closingPrompt: closingPrompt, translating: translating,
+            translationPrompt: LLMPostProcessor.defaultTranslationInstruction)
+    }
+
+    func testAnEchoOfTheShippedClosingIsStillCaught() {
+        assertEcho(LLMPostProcessor.defaultClosingInstruction, input: "ok", system: shipped())
+    }
+
+    func testASignOffAskedForInACustomPromptIsNotAnEcho() {
+        let custom = LLMPostProcessor.defaultInstruction
+            + "\nEnd every message with: Best regards, Maxim Costa, Head of Product at Scalab Games"
+        let reply = "See you on Thursday for the demo. Best regards, Maxim Costa, Head of Product at Scalab Games"
+        assertNoEcho(reply, input: "see you thursday for the demo", system: shipped(generalPrompt: custom))
+    }
+
+    func testAUsersOwnAppRuleIsLeftOutButAShippedPresetIsKept() {
+        XCTAssertFalse(shipped(profile: slack).contains(slack.instructions))
+        let preset = AppContextProfile.defaultPresets[0]
+        XCTAssertTrue(shipped(profile: preset).contains(preset.instructions))
+    }
+
+    func testARewrittenClosingIsLeftOut() {
+        let reference = shipped(closingPrompt: "Answer with the corrected text only, nothing else at all.")
+        XCTAssertFalse(reference.contains("nothing else at all"))
+        XCTAssertTrue(reference.contains(LLMPostProcessor.defaultInstruction.prefix(30)))
+    }
 }
