@@ -3,8 +3,11 @@ import SwiftUI
 
 // The app-shaped recording bubble, with the Liquid Glass layout constraints baked in:
 //
-//   ( dot · waveform / label — reorderable )   [ stop ] [ cancel ]
-//     ↑ the central pill, dot always first        ↑ rightmost, fixed
+//   ( dot · waveform / label — reorderable )  ( live caption )  [ stop ] [ cancel ]
+//     ↑ the central pill, dot always first       ↑ while text streams  ↑ rightmost, fixed
+//
+// The live caption gets a glass shape of its own next to the pill, so the words never share the
+// pill with the meter: the meter keeps its size and the text grows on its own.
 //
 // The two controls are SEPARATE glass shapes that neck out of the pill's trailing cap. Everything
 // is in one `GlassEffectContainer`, so a control merges into the pill when tucked and pinches off
@@ -181,6 +184,12 @@ public struct RecordingBubble: View {
                     coreContent.hidden()
                     if shown { core.transition(.opacity) }
                 }
+                if separateCaption, let caption {
+                    ZStack {
+                        captionContent(caption).hidden()
+                        if shown { captionGlass(caption).transition(.opacity) }
+                    }
+                }
                 // Both controls keep their slots in every phase: a tucked control is moved (a
                 // render-only offset), never removed, so the window never reflows under the pill.
                 if let onStop {
@@ -267,7 +276,9 @@ public struct RecordingBubble: View {
                         }
                     case .label:
                         if let caption {
-                            captionText(caption)
+                            // Drawn in its own shape beside the pill when the pill keeps
+                            // something to show; inside it only when the caption is all there is.
+                            if !separateCaption { captionText(caption) }
                         } else {
                             Text(labelText)
                                 // Spotlight's placeholder: regular weight, secondary grey.
@@ -284,6 +295,34 @@ public struct RecordingBubble: View {
         .padding(.trailing, (bar * 0.42).rounded())
         .padding(.vertical, (6 * size).rounded())
         .frame(minHeight: bar)
+    }
+
+    /// The caption sits in its own glass shape when the pill keeps a dot or a meter beside it.
+    private var separateCaption: Bool {
+        caption != nil && (showDot || center.contains(.dot) || center.contains(.waveform))
+    }
+
+    private var captionShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: bar / 2, style: .continuous)
+    }
+
+    private func captionContent(_ caption: AttributedString) -> some View {
+        captionText(caption)
+            .padding(.horizontal, (bar * 0.42).rounded())
+            .padding(.vertical, (6 * size).rounded())
+            .frame(minHeight: bar)
+    }
+
+    /// The live caption's own glass, built like the pill (rim, dim, then the glass) so the two read
+    /// as one family. Rounded rather than a capsule: two lines of text in a capsule lose their
+    /// corners.
+    private func captionGlass(_ caption: AttributedString) -> some View {
+        captionContent(caption)
+            .background { rimStroke(rim, in: captionShape) }
+            .background { captionShape.fill(dimColor.opacity(dim)) }
+            .glassEffect(glass.glass, in: .rect(cornerRadius: bar / 2))
+            .glassEffectID("caption", in: ns)
+            .glassEffectTransition(.materialize)
     }
 
     /// Lines of live caption the pill grows to before it starts showing only the latest ones.
@@ -399,8 +438,12 @@ public struct RecordingBubble: View {
 
     /// A hairline brighter at the top (where light hits) and faint at the bottom.
     @ViewBuilder private func rimStroke(_ strength: Double) -> some View {
+        rimStroke(strength, in: Capsule())
+    }
+
+    @ViewBuilder private func rimStroke<S: InsettableShape>(_ strength: Double, in shape: S) -> some View {
         if strength > 0 {
-            Capsule().strokeBorder(
+            shape.strokeBorder(
                 LinearGradient(colors: [.white.opacity(strength), .white.opacity(strength * 0.25),
                                         .white.opacity(strength * 0.5)],
                                startPoint: .top, endPoint: .bottom),
