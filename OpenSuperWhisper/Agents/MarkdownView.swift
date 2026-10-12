@@ -1,113 +1,52 @@
+import AppKit
 import SwiftUI
 
-/// Lays out an agent's Markdown reply: the blocks from `MarkdownBlock`, inline styling from
-/// `AttributedString`. Sized for reading at a glance in the agent panel, not for documents.
-struct MarkdownView: View {
-    let markdown: String
+/// An agent's Markdown reply as one read-only text view. It was a stack of SwiftUI `Text`s, and
+/// a selection could not leave the one it started in: a few lines could be copied, never the
+/// whole reply, and selected code showed no highlight at all on its fill.
+struct MarkdownView: NSViewRepresentable {
+    let blocks: [MarkdownBlock]
     var fontSize: CGFloat = 14
+    var prose: MarkdownProse = .primary
 
-    var body: some View {
-        stack(MarkdownBlock.parse(markdown))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .textSelection(.enabled)
+    init(markdown: String, fontSize: CGFloat = 14) {
+        self.blocks = MarkdownBlock.parse(markdown)
+        self.fontSize = fontSize
     }
 
-    /// Type-erased because a quote lays out its blocks through here, and `view(for:)` lays out the
-    /// quote: an opaque return type cannot contain itself.
-    private func stack(_ blocks: [MarkdownBlock]) -> AnyView {
-        AnyView(VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-                view(for: block)
-            }
-        })
+    init(blocks: [MarkdownBlock], fontSize: CGFloat = 14, prose: MarkdownProse = .primary) {
+        self.blocks = blocks
+        self.fontSize = fontSize
+        self.prose = prose
     }
 
-    @ViewBuilder private func view(for block: MarkdownBlock) -> some View {
-        switch block {
-        case .heading(let level, let text):
-            Text(Self.inline(text))
-                .scaledFont(size: fontSize + CGFloat(max(0, 4 - level)) * 1.5, weight: .semibold)
-                .foregroundColor(STheme.textBright)
-                .padding(.top, level <= 2 ? 4 : 0)
-        case .paragraph(let text):
-            prose(text)
-        case .bullet(let items):
-            list(items) { _ in "•" }
-        case .numbered(let items):
-            list(items) { "\($0 + 1)." }
-        case .code(_, let text):
-            ScrollView(.horizontal, showsIndicators: false) {
-                Text(text)
-                    .scaledFont(size: fontSize - 1.5, design: .monospaced)
-                    .foregroundColor(STheme.textBright)
-                    .padding(12)
-            }
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(STheme.fill))
-        case .quote(let blocks):
-            HStack(alignment: .top, spacing: 10) {
-                RoundedRectangle(cornerRadius: 1.5).fill(STheme.accent.opacity(0.6)).frame(width: 3)
-                stack(blocks)
-            }
-            .fixedSize(horizontal: false, vertical: true)
-        case .table(let header, let rows):
-            table(header: header, rows: rows)
-        case .rule:
-            Rectangle().fill(STheme.border).frame(height: 1).padding(.vertical, 2)
+    func makeNSView(context: Context) -> MarkdownTextView {
+        MarkdownTextView()
+    }
+
+    func updateNSView(_ view: MarkdownTextView, context: Context) {
+        let content = MarkdownTextView.Content(blocks: blocks, fontSize: fontSize,
+                                               scale: CGFloat(context.environment.textScaleFactor), prose: prose)
+        view.show(content)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: MarkdownTextView, context: Context) -> CGSize? {
+        let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? AgentPanelController.width
+        return CGSize(width: width, height: nsView.height(forWidth: width))
+    }
+
+    /// `text` escaped so the Markdown parser shows it as written: every ASCII punctuation mark a
+    /// Markdown span could start with gets a backslash.
+    static func literal(_ text: String) -> String {
+        var out = ""
+        for character in text {
+            if "\\`*_{}[]()#+-.!~<>|".contains(character) { out.append("\\") }
+            out.append(character)
         }
+        return out
     }
 
-    private func prose(_ text: String) -> some View {
-        Text(Self.inline(text))
-            .scaledFont(size: fontSize)
-            .foregroundColor(STheme.text)
-            .lineSpacing(3)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func list(_ items: [String], marker: @escaping (Int) -> String) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(marker(index))
-                        .scaledFont(size: fontSize, weight: .medium)
-                        .monospacedDigit()
-                        .foregroundColor(STheme.hint)
-                        .frame(minWidth: 14, alignment: .trailing)
-                    prose(item)
-                }
-            }
-        }
-    }
-
-    private func table(header: [String], rows: [[String]]) -> some View {
-        let columns = max(header.count, rows.map(\.count).max() ?? 0)
-        return ScrollView(.horizontal, showsIndicators: false) {
-            Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 7) {
-                GridRow {
-                    ForEach(0..<columns, id: \.self) { column in
-                        Text(Self.inline(column < header.count ? header[column] : ""))
-                            .scaledFont(size: fontSize - 1, weight: .semibold)
-                            .foregroundColor(STheme.textBright)
-                    }
-                }
-                Rectangle().fill(STheme.border).frame(height: 1).gridCellUnsizedAxes(.horizontal)
-                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    GridRow {
-                        ForEach(0..<columns, id: \.self) { column in
-                            Text(Self.inline(column < row.count ? row[column] : ""))
-                                .scaledFont(size: fontSize - 1)
-                                .monospacedDigit()
-                                .foregroundColor(STheme.text)
-                        }
-                    }
-                }
-            }
-            .padding(12)
-        }
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(STheme.fill))
-    }
-
-    /// Inline styling, with code spans set on a light fill so identifiers stand out from prose.
+    /// Inline styling for a single line drawn by SwiftUI, with code spans set on a light fill.
     static func inline(_ text: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace)
@@ -117,5 +56,146 @@ struct MarkdownView: View {
             styled[run.range].foregroundColor = STheme.textBright
         }
         return styled
+    }
+}
+
+/// Read-only and selectable, sized by SwiftUI to its text. It lives in a non-activating panel,
+/// so it asks for the panel to become key on a click (⌘A and ⌘C need that) and takes the first
+/// click instead of spending it on focus.
+final class MarkdownTextView: NSTextView {
+    struct Content: Equatable {
+        var blocks: [MarkdownBlock]
+        var fontSize: CGFloat
+        var scale: CGFloat
+        var prose: MarkdownProse
+    }
+
+    private var content: Content?
+
+    init() {
+        let storage = NSTextStorage()
+        let layout = MarkdownLayoutManager()
+        storage.addLayoutManager(layout)
+        let container = NSTextContainer(size: NSSize(width: AgentPanelController.width,
+                                                     height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+        super.init(frame: .zero, textContainer: container)
+        isEditable = false
+        isSelectable = true
+        isRichText = true
+        drawsBackground = false
+        textContainerInset = .zero
+        isVerticallyResizable = false
+        isHorizontallyResizable = false
+        usesFontPanel = false
+        selectedTextAttributes = [.backgroundColor: MarkdownPalette.selection]
+        linkTextAttributes = [.foregroundColor: MarkdownPalette.accent, .cursor: NSCursor.pointingHand]
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override init(frame frameRect: NSRect, textContainer container: NSTextContainer?) {
+        super.init(frame: frameRect, textContainer: container)
+    }
+
+    /// Replaces the text only when it changed: SwiftUI updates the view on every redraw of the
+    /// panel (the age label ticks, the draft is typed), and each replacement drops the selection.
+    func show(_ new: Content) {
+        guard new != content else { return }
+        content = new
+        let builder = MarkdownAttributed(fontSize: new.fontSize, scale: new.scale, prose: new.prose)
+        textStorage?.setAttributedString(builder.build(new.blocks))
+        invalidateIntrinsicContentSize()
+        #if DEBUG
+        applySnapshotSelection()
+        #endif
+    }
+
+    func height(forWidth width: CGFloat) -> CGFloat {
+        guard let container = textContainer, let layout = layoutManager else { return 0 }
+        // Setting the same size still invalidates the layout, and SwiftUI asks on every keystroke
+        // in the reply field: only a real width change should lay the reply out again.
+        if container.size.width != width {
+            container.size = NSSize(width: width, height: .greatestFiniteMagnitude)
+        }
+        layout.ensureLayout(for: container)
+        return ceil(layout.usedRect(for: container).height)
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        if let container = textContainer, container.size.width != newSize.width {
+            container.size = NSSize(width: newSize.width, height: .greatestFiniteMagnitude)
+        }
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override var needsPanelToBecomeKey: Bool { true }
+
+    /// The app may have no Edit menu to route ⌘A and ⌘C here, so the view answers them itself.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard window?.firstResponder === self,
+              // Caps Lock is part of the mask but changes nothing about the shortcut.
+              event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock) == .command else {
+            return super.performKeyEquivalent(with: event)
+        }
+        switch event.charactersIgnoringModifiers {
+        case "a": selectAll(nil); return true
+        case "c": copy(nil); return true
+        default: return super.performKeyEquivalent(with: event)
+        }
+    }
+
+    override var writablePasteboardTypes: [NSPasteboard.PasteboardType] { [.string] }
+
+    /// Copies (and drags) plain text that reads well elsewhere: list markers, table cells split
+    /// by tabs, blank lines between blocks, rather than the attributed text's layout tabs.
+    override func writeSelection(to pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
+        guard type == .string, let storage = textStorage else { return false }
+        let text = selectedRanges.map(\.rangeValue)
+            .filter { $0.length > 0 }
+            .map { MarkdownAttributed.plainText(storage, in: $0) }
+            .joined(separator: "\n")
+        return pboard.setString(text, forType: .string)
+    }
+
+    #if DEBUG
+    /// Set by the snapshot probe: the next text shown is selected from the first of these
+    /// strings through the end of the second, to draw the highlight off-screen.
+    static var snapshotSelection: (from: String, through: String)?
+
+    private func applySnapshotSelection() {
+        guard let wanted = Self.snapshotSelection else { return }
+        let text = string as NSString
+        let start = text.range(of: wanted.from)
+        let end = text.range(of: wanted.through)
+        guard start.location != NSNotFound, end.location != NSNotFound else { return }
+        setSelectedRange(NSRange(location: start.location, length: NSMaxRange(end) - start.location))
+    }
+    #endif
+}
+
+/// Draws a selection in the theme's colour whether or not the panel has focus. The system's
+/// grey for an unfocused selection is close to the code fill, so selected code looked unselected.
+final class MarkdownLayoutManager: NSLayoutManager {
+    override func fillBackgroundRectArray(_ rectArray: UnsafePointer<NSRect>, count rectCount: Int,
+                                          forCharacterRange charRange: NSRange, color: NSColor) {
+        let fill = Self.isSystemSelection(color) ? MarkdownPalette.selection : color
+        fill.setFill()
+        super.fillBackgroundRectArray(rectArray, count: rectCount, forCharacterRange: charRange, color: fill)
+    }
+
+    /// AppKit picks among several system colours for a selection, depending on focus; the code
+    /// chip and the table rule come through here too, in theme colours.
+    private static let systemSelectionColors: [NSColor] = [
+        .selectedTextBackgroundColor, .unemphasizedSelectedTextBackgroundColor,
+        .selectedContentBackgroundColor, .unemphasizedSelectedContentBackgroundColor,
+        .secondarySelectedControlColor,
+    ]
+
+    private static func isSystemSelection(_ color: NSColor) -> Bool {
+        systemSelectionColors.contains(color)
     }
 }

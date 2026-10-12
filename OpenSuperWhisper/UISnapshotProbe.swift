@@ -41,6 +41,7 @@ enum UISnapshotProbe {
         "settings-appearance-list": { scrolled(.appearance, to: "Order and display") },
         "settings-appearance-notch": { scrolled(.appearance, to: "Notch opening width") },
         "agent-panel": { AgentPanelSnapshot.make(focused: true) },
+        "agent-panel-selection": { AgentPanelSnapshot.make(selecting: true) },
         "agent-panel-draft": { AgentPanelSnapshot.make(draft: "Yes, open it and ask for a review.") },
         "agent-panel-permission": { AgentPanelSnapshot.make(showing: .permission) },
         "agent-panel-question": { AgentPanelSnapshot.make(showing: .question) },
