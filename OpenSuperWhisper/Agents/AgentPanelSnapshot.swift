@@ -8,9 +8,12 @@ import OpenSuperWhisperCore
 /// throwaway one, and their hook is the probe itself, so the inbox takes them as live.
 @MainActor
 enum AgentPanelSnapshot {
-    static func make(draft: String? = nil, showing kind: AgentRequest.Kind = .stop, focused: Bool = false) -> AnyView {
+    static func make(draft: String? = nil, showing kind: AgentRequest.Kind = .stop, focused: Bool = false,
+                     selecting: Bool = false) -> AnyView {
         AgentPanelController.shared.isSnapshotting = true
-        let requests = seed()
+        // From the prose, through the list and the code block, into the table.
+        MarkdownTextView.snapshotSelection = selecting ? ("instead of", "150 ms") : nil
+        let requests = seed(stopMessage: selecting ? richMessage : stopMessage)
         AgentInbox.shared.reload()
         AgentInbox.shared.selectedID = requests.first { $0.kind == kind }?.id
         if let draft, let first = requests.first { AgentInbox.shared.drafts[first.id] = draft }
@@ -23,20 +26,48 @@ enum AgentPanelSnapshot {
         )
     }
 
-    private static func seed() -> [AgentRequest] {
+    private static let stopMessage = """
+        Done. The previous clipboard now comes back after **0.5 s** instead of 1 s, and the delay is a setting.
+
+        - `ClipboardUtil.borrowForPaste` restores after `clipboardRestoreDelayMs`
+        - New slider in **Settings › Output** (150 to 2000 ms)
+        - 4 new tests, all 312 passing
+
+        Want me to open the PR?
+        """
+
+    /// Every kind of block, for the selection screen.
+    private static let richMessage = """
+        ## Clipboard restore
+
+        Done. The previous clipboard now comes back after **0.5 s** instead of 1 s.
+
+        - `ClipboardUtil.borrowForPaste` restores after `clipboardRestoreDelayMs`
+        - New slider in **Settings › Output**
+
+        ```swift
+        let delay = prefs.clipboardRestoreDelayMs
+        try await Task.sleep(for: .milliseconds(delay))
+        ```
+
+        | Delay | Paste OK |
+        |---|---:|
+        | 150 ms | 97 % |
+        | 500 ms | 100 % |
+
+        > Older builds keep the 1 s delay.
+
+        ---
+
+        Want me to open the PR?
+        """
+
+    private static func seed(stopMessage: String) -> [AgentRequest] {
         guard let directory = AgentBridge.requestsDirectory else { return [] }
         try? FileManager.default.removeItem(at: directory)
         let now = Date()
         let requests = [
-            request(kind: .stop, title: "Faster clipboard restore", age: 40, message: """
-                Done. The previous clipboard now comes back after **0.5 s** instead of 1 s, and the delay is a setting.
-
-                - `ClipboardUtil.borrowForPaste` restores after `clipboardRestoreDelayMs`
-                - New slider in **Settings › Output** (150 to 2000 ms)
-                - 4 new tests, all 312 passing
-
-                Want me to open the PR?
-                """, now: now),
+            request(kind: .stop, title: "Faster clipboard restore", age: 40, message: stopMessage, now: now),
             {
                 var permission = request(kind: .permission, title: "Release notes", age: 25,
                                          message: "Push the branch so the PR can be opened.", now: now)
