@@ -6,7 +6,11 @@ struct HomeGreeting: View {
     let trigger: HomeTriggerSummary?
 
     private var firstName: String {
-        NSFullUserName().split(separator: " ").first.map(String.init) ?? ""
+        #if DEBUG
+        // The snapshot probe's demo mode: screenshots never carry the real account's name.
+        if let name = ProcessInfo.processInfo.environment["OSW_SNAPSHOT_NAME"] { return name }
+        #endif
+        return NSFullUserName().split(separator: " ").first.map(String.init) ?? ""
     }
 
     var body: some View {
@@ -79,8 +83,8 @@ struct HomeSummaryTiles: View {
     private var modelValue: String {
         guard let model = models.active else { return String(localized: "No model chosen") }
         return model.engine == "remote"
-            ? String(localized: "\(model.displayName) · server")
-            : String(localized: "\(model.displayName) · local")
+            ? String(localized: "\(model.friendlyName) · server")
+            : String(localized: "\(model.friendlyName) · local")
     }
 }
 

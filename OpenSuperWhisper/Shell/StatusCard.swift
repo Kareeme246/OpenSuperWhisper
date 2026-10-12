@@ -23,8 +23,8 @@ enum ReadinessState: Equatable {
         if !accessibilityGranted { return .accessibilityDenied }
         if let engineError { return .engineError(engineError) }
         guard let model else { return .noModel }
-        if isLoading { return .loading(model: model.displayName) }
-        return .ready(model: model.displayName, onDevice: model.engine != "remote", microphone: microphone)
+        if isLoading { return .loading(model: model.friendlyName) }
+        return .ready(model: model.friendlyName, onDevice: model.engine != "remote", microphone: microphone)
     }
 }
 

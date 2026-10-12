@@ -81,7 +81,19 @@ class PermissionsManager: ObservableObject {
         permissionCheckTimer = nil
     }
 
+    #if DEBUG
+    /// Set by the snapshot probe's demo mode, so screenshots show a ready app whatever this
+    /// process happens to be allowed.
+    nonisolated(unsafe) static var snapshotGrantsAll = false
+    #endif
+
     func checkMicrophonePermission() {
+        #if DEBUG
+        if Self.snapshotGrantsAll {
+            DispatchQueue.main.async { [weak self] in self?.isMicrophonePermissionGranted = true }
+            return
+        }
+        #endif
         let status = AVCaptureDevice.authorizationStatus(for: .audio)
 
         DispatchQueue.main.async { [weak self] in
@@ -96,6 +108,10 @@ class PermissionsManager: ObservableObject {
 
     func checkAccessibilityPermission() {
         #if DEBUG
+        if Self.snapshotGrantsAll {
+            DispatchQueue.main.async { [weak self] in self?.isAccessibilityPermissionGranted = true }
+            return
+        }
         // The DEBUG build is signed with a different identity than the release app, so its TCC
         // Accessibility grant is separate and goes stale on each rebuild. Treat it as granted while
         // developing so the permission gate doesn't block the app and we can test without
