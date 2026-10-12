@@ -137,7 +137,7 @@ struct ModelsRubric: View {
         if let active = selection.active {
             HStack(spacing: 6) {
                 Circle().fill(STheme.readyDot).frame(width: 7, height: 7)
-                Text("Active · \(activeName(active))")
+                Text("Active · \(active.friendlyName)")
                     .scaledFont(size: 12.5, weight: .semibold)
                     .foregroundColor(STheme.ok)
                     .lineLimit(1)
@@ -146,22 +146,6 @@ struct ModelsRubric: View {
             .padding(.horizontal, 10).padding(.vertical, 4)
             .background(Capsule().fill(STheme.okBg))
             .frame(maxWidth: 300, alignment: .trailing)
-        }
-    }
-
-    private func activeName(_ option: DictationModelOption) -> String {
-        switch option.engine {
-        case "fluidaudio":
-            return SettingsFluidAudioModels.availableModels.first { $0.version == option.identifier }?.name
-                ?? "Parakeet \(option.identifier)"
-        case "whisper":
-            let file = URL(fileURLWithPath: option.identifier).lastPathComponent
-            return SettingsDownloadableModels.availableModels.first { $0.filename == file }.map { "Whisper \($0.name)" }
-                ?? option.displayName
-        case "remote":
-            return option.displayName
-        default:
-            return option.displayName
         }
     }
 

@@ -2,16 +2,19 @@
 
 # OpenSuperWhisper
 
-**Speak. It types. In any app on your Mac — free, open-source, on-device.**
+**Speak, and it types. In any app on your Mac. Free, open source, on-device.**
 
-[![Website](https://img.shields.io/badge/Website-opensuperwhisper.com-E8734A?style=for-the-badge)](https://opensuperwhisper.com)
+[![Website](https://img.shields.io/badge/Website-opensuperwhisper.com-A94327?style=for-the-badge)](https://opensuperwhisper.com)
 [![Latest release](https://img.shields.io/github/v/release/my-monkeys/OpenSuperWhisper?style=for-the-badge&color=0a8f57)](https://github.com/my-monkeys/OpenSuperWhisper/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-969696?style=for-the-badge)](LICENSE)
 
-Hold a shortcut, speak, release — your words land in whatever app you're in.
-Four transcription engines (three fully on-device), no subscription, no account, no telemetry.
+Hold a shortcut, speak, let go: your words land where you were typing.
+Five transcription engines, four of them fully on-device. No subscription, no account, no telemetry.
 
-<img src="docs/screenshots/history.png" width="380" alt="Transcription history — every dictation with its duration, word count and the model that transcribed it" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/home-dark.png">
+  <img src="docs/screenshots/home-light.png" width="820" alt="OpenSuperWhisper's home screen: a greeting with the shortcut, the active model, and the feed of recent dictations grouped by day, with the record button at the bottom" />
+</picture>
 
 </div>
 
@@ -29,86 +32,125 @@ brew install --cask my-monkeys/tap/opensuperwhisper
 > ⚠️ Use the full `my-monkeys/tap/` path. The bare name `opensuperwhisper` is the homebrew-cask
 > entry for the original project, which still serves its 0.1.0, not this fork.
 
-Or download the latest **notarized** `.dmg` from [Releases](https://github.com/my-monkeys/OpenSuperWhisper/releases),
-or [build from source](#building-from-source).
+You can also download the latest **notarized** `.dmg` from
+[Releases](https://github.com/my-monkeys/OpenSuperWhisper/releases), or
+[build from source](#building-from-source).
 
-**Requires** macOS 14 (Sonoma) or later, Apple Silicon or Intel — Homebrew picks the right build
-automatically. (The Intel build ships Whisper + Parakeet; SenseVoice is Apple-Silicon-only.)
+**Requires** macOS 14 (Sonoma) or later, on Apple Silicon or Intel. Homebrew picks the right build.
+The Intel build has Whisper, Parakeet and the remote engine; SenseVoice needs Apple Silicon, and
+Apple Speech and Apple Intelligence need macOS 26.
 
-## The basics
+The first launch walks you through four short steps: your shortcut, a model, the two macOS
+permissions (microphone, and Accessibility to type into other apps), and a first dictation to try it.
 
-- ⌨️ **Global shortcut** — a key combination or a single modifier key (Right ⌥, Left ⌘, Fn…), with
-  hold-to-record: hold to speak, release to insert.
-- 👀 **Live preview** — watch the text build up in the recording indicator as you speak (Parakeet).
-- 📍 **Indicator where you want it** — near the cursor, at a screen edge, or docked in the
-  **notch / Dynamic Island** (real or faux). Optional on-bubble **Stop / Cancel buttons**
-  (off by default — Settings → General → Recording Behavior).
-- 📁 **Files too** — drag audio files onto the app (or `opensuperwhisper transcribe file.m4a`
-  from the terminal) and they queue up.
-- 🌍 **Speaks your language** — ~99 languages with auto-detect (incl. Hebrew via an
-  [ivrit.ai](https://www.ivrit.ai/) model), live **translation to English**, and an interface
-  localized in English, French, German, Spanish, Italian, Portuguese (BR) and Vietnamese.
+## Everyday use
 
-## Four engines, your choice
+- ⌨️ **One shortcut, your way.** A key combination, a modifier on its own (Right ⌥, Fn…), two
+  modifiers together, or a mouse button. Hold to talk and release to insert, or tap to start and
+  tap again to stop. Extras: lock a long dictation with Space, dictate and press Return in one go,
+  paste the last dictation again.
+- 💬 **Watch it as you speak.** With Parakeet, the words appear live in the recording bubble (in a
+  capsule of their own next to the waveform, with Liquid Glass). Say a **stop phrase** ("over and out") to end the
+  dictation hands-free, and optionally press Return after it.
+- 📍 **A bubble where you want it.** Near the cursor, at an edge of the screen, docked in the notch
+  (a drawn one on Macs without), or wherever you drag it. Liquid Glass on macOS 26. Choose which
+  elements it shows: blinking dot, waveform, label, Stop and Cancel buttons.
+- 🏠 **Home.** Every dictation, grouped by day, with the app it went to and the model that wrote it.
+  Filter dictations, imported files or errors, search everything with ⌘K, copy, play back, or run a
+  dictation again with another model. A failed transcription keeps its audio and a retry button.
+- 📁 **Files too.** Drop audio files on the window or use **Import**, and they queue up.
+- 🌍 **Your language.** About 99 languages with auto-detect, or follow your keyboard layout.
+  Translation to English with Whisper. The interface is in English, French, German, Spanish,
+  Italian, Portuguese (BR) and Vietnamese, light or dark.
+
+## Five engines
 
 | Engine | Runs | Best for |
 |---|---|---|
-| **Whisper** ([whisper.cpp](https://github.com/ggerganov/whisper.cpp)) | On-device | Accuracy, ~99 languages, translation to English |
-| **Parakeet** ([FluidAudio](https://github.com/AntinomyCollective/FluidAudio)) | On-device | Speed + live preview, 25 European languages |
+| **Parakeet** ([FluidAudio](https://github.com/AntinomyCollective/FluidAudio)) | On-device | Speed and live text, 25 European languages |
+| **Whisper** ([whisper.cpp](https://github.com/ggerganov/whisper.cpp)) | On-device | Accuracy, about 99 languages, translation to English |
 | **SenseVoice** ([sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)) | On-device | Chinese, Cantonese, English, Japanese, Korean |
-| **Remote** | Your server | Any OpenAI-compatible endpoint — Groq preset, LiteLLM, [speaches](https://github.com/speaches-ai/speaches), a box on your LAN |
+| **Apple Speech** | On-device, built into macOS 26 | Nothing to download, models managed by macOS |
+| **Remote** | Your server | Any OpenAI-compatible endpoint: Groq preset, LiteLLM, [speaches](https://github.com/speaches-ai/speaches), a box on your LAN |
 
 <div align="center">
-<img src="docs/screenshots/remote-engine.png" width="640" alt="Remote engine settings — point the app at any OpenAI-compatible server, with a Groq preset and connection test" />
+<img src="docs/screenshots/settings-models.png" width="720" alt="Settings, Models: the five engine cards, the active model, and the Parakeet models with download and use buttons" />
 </div>
 
-The **Remote** engine sends audio to *your* chosen server (and says so, plainly). It lists the
-server's models after an authenticated **Test Connection**, retries transient network hiccups, and —
-if your server is unreachable — can **fall back to a local model** so dictation never just fails.
-Models load lazily: browsing engine tabs never triggers a surprise download.
+Browsing an engine never downloads anything, and only one model is ever active. The **Remote**
+engine sends audio to the server you chose and says so plainly. It lists the server's models after a
+connection test, retries network hiccups, and can **fall back to a local model** so a dictation never
+just fails.
 
-## Smart while you dictate
+## Your words, spelled right
 
-- 🪟 **Rules** — bind a model to an app (or a website in supported browsers) and the model
-  switches automatically when you dictate there: a fast one for chat, an accurate one for email.
-  The same tab holds **per-app formatting** rules, so the cleanup pass knows that "at Rob" means
-  "@Rob" in Slack and "src slash main dot swift" means `src/main.swift` in a terminal.
-  Managed from Settings → Rules or the menu-bar **Model** picker.
-- 📖 **Custom dictionary** — your proper nouns and jargon come out spelled right; boosts
-  recognition and applies replacements.
-- 🧹 **Cleaner output** — optional filler-word removal (um, uh…), automatic sentence spacing, and
-  "No speech detected" is never pasted.
-- 🤖 **AI cleanup** — optionally tidy punctuation/casing with an LLM: the **built-in** model
-  (Qwen2.5 1.5B, one-time ~1 GB download, no server to run), a local
-  [Ollama](https://ollama.com) server, or any OpenAI-compatible endpoint. Opt-in; the first two
-  stay fully on-device, and the transcription is returned verbatim if the model misbehaves.
-  Pick the on-device model to match the job: **Qwen2.5 1.5B** is quick, **7B** follows instructions
-  far more reliably. The prompt is yours too — an opening and a closing instruction, together the
-  entire system prompt with nothing wrapped around them and per-app rules sandwiched in between.
-  Each half resets to its shipped text, and **Translate to …** has the model rewrite both in the
-  language you dictate, which is what stops it from answering in the prompt's language instead of
-  yours.
-- ⏯️ **Media handling** — pause other apps' playback (and resume only what was actually playing) or
-  duck the system volume while you record.
-- 🎤 **Any microphone** — built-in, external, Bluetooth or iPhone (Continuity), switchable from the
-  menu bar.
+The **Dictionary** holds the names and terms you say often.
+
+- **New words** help the engine recognise them (Parakeet and Whisper).
+- **Corrections** rewrite what the model heard: several ways of mishearing a word can point to the
+  same spelling, a rule can be a regular expression, and punctuation rules know which side to glue
+  to.
+- **Commands**: "new paragraph" can be a line break. **Teach punctuation** has you read a few
+  sentences aloud and turns the way you say punctuation into rules.
+- Every entry has a live test, so you see the result before you save.
 
 <div align="center">
-<img src="docs/screenshots/app-context.png" width="640" alt="Rules — per-app and per-site model rules" />
+<img src="docs/screenshots/dictionary.png" width="720" alt="The Dictionary page with the entry editor open: a correction that always writes OpenSuperWhisper, with its misheard variants as chips and a live test" />
 </div>
 
-## A history that remembers (if you want one)
+## Clean text, per app
 
-Every dictation records **where** it happened (app, window title, site) and **which model**
-transcribed it. Rerun any entry with a different model from the ↻ menu; failed transcriptions
-keep their audio with a retry button instead of vanishing. Or turn history off entirely —
-nothing is persisted, and retention limits (count / age) are available in between.
+- 🧹 **Cleanup.** Remove hesitations (um, uh…) and keep the spacing between dictations right.
+- 🤖 **Format with AI** (optional). Tidy punctuation and casing with a language model:
+  - **Apple Intelligence**, on-device on macOS 26, nothing to download. Unless you picked another
+    engine, it is the one used on Macs that have it.
+  - The **built-in** model (Qwen2.5 1.5B or 7B, a one-time download, no server to run).
+  - A local [Ollama](https://ollama.com) server, or any OpenAI-compatible endpoint.
+
+  The instructions are yours to edit. If the model fails, misbehaves or repeats its own
+  instructions, the dictation is pasted as you said it.
+- 🪟 **Per app** (on the **Style** page). One line per app or website: which model to use there,
+  whether to paste or type (terminals and some games prefer typing), and formatting rules for the AI
+  pass, so "at Rob" becomes "@Rob" in Slack and "src slash main dot swift" becomes `src/main.swift`
+  in a terminal. The model follows you when you switch apps.
+- ⏯️ **While you speak.** Other apps' playback pauses (and only what was really playing resumes), or
+  the system volume dips.
+
+<div align="center">
+<img src="docs/screenshots/settings-text-ai.png" width="720" alt="Settings, Text and AI: cleanup switches and the AI engine menu set to Apple Intelligence, ready on this Mac" />
+</div>
+
+## Answer your coding agents by voice
+
+Install the plugin from Settings → Assistants and OpenSuperWhisper shows a small panel when
+**Claude Code** finishes a task, needs a permission or asks you a question. Read the answer, then
+reply by voice or keyboard without going back to the terminal. **Codex** works too, except for its
+questions, which still wait in the terminal. You choose which events
+show the panel and which projects it follows.
+
+<div align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/agent-panel-dark.png">
+  <img src="docs/screenshots/agent-panel-light.png" width="560" alt="The answer panel: Claude Code's message with a short list, and a reply field with a microphone button" />
+</picture>
+</div>
+
+## Settings that stay out of the way
+
+Settings open over the window with ⌘, and close with Esc. Eight sections (General, Dictation,
+Models, Text & AI, Appearance, Assistants, Privacy, Advanced) show the essentials first; an
+**Advanced** switch in each one reveals the rest. Search finds any setting by name, in English or
+in your language.
+
+<div align="center">
+<img src="docs/screenshots/settings-dictation.png" width="720" alt="Settings, Dictation: the shortcut, the cancel key, the microphone and the spoken language" />
+</div>
 
 ## Private by default
 
-On-device engines never send audio anywhere. There's no account, no telemetry, and the only
-network path is the Remote engine — which you explicitly configure and which labels itself
-clearly. History is yours to disable or cap.
+On-device engines never send audio anywhere. There's no account and no telemetry. The only ways
+audio or text leave your Mac are the Remote engine and a remote AI server, both of which you set up
+yourself and which say so. History is yours to cap by count or age, or to turn off entirely.
 
 ## Command line
 
@@ -118,27 +160,29 @@ opensuperwhisper transcribe path/to/audio.wav --json   # { "file", "text" }
 ```
 
 `--model path/to/ggml-model.bin` transcribes with Whisper on that model whatever engine the app is
-set to, and `--raw` ignores your prompt, custom dictionary and transcription settings (English, a
-fresh install's defaults), so nothing set up in the app changes the result.
+set to, and `--raw` ignores your prompt, dictionary and transcription settings (English, a fresh
+install's defaults), so nothing you set up in the app changes the result.
 
 Engine logs go to stderr, so it pipes cleanly: `opensuperwhisper transcribe note.m4a > note.txt`.
-Set up a model in the app at least once first. There's also a **post-record hook** to run your own
-shell command after each dictation (text + audio path via env vars / JSON on stdin).
+Set up a model in the app at least once first. A **post-record hook** can also run your own shell
+command after each dictation, with the text and the audio path in environment variables and as JSON
+on stdin.
 
-## 🧪 Beta testing — we need you
+## 🧪 Beta testing: we need you
 
 Real-world testing is what makes this stable. Pre-release builds are on the
-[Releases page](https://github.com/my-monkeys/OpenSuperWhisper/releases) (marked *Pre-release*) —
-they install alongside stable and never touch your auto-updates.
+[Releases page](https://github.com/my-monkeys/OpenSuperWhisper/releases) (marked *Pre-release*).
+They install alongside the stable build and never touch your auto-updates.
 
-- 🐞 **Bugs** → [open an issue](https://github.com/my-monkeys/OpenSuperWhisper/issues/new) with your
-  macOS version, the engine/model in use, and steps to reproduce.
-- 💬 **Feedback** (no account needed) → the form on [opensuperwhisper.com](https://opensuperwhisper.com/#feedback).
+- 🐞 **Bugs**: [open an issue](https://github.com/my-monkeys/OpenSuperWhisper/issues/new) with your
+  macOS version, the engine and model in use, and the steps to reproduce.
+- 💬 **Feedback**, no account needed: the form on [opensuperwhisper.com](https://opensuperwhisper.com/#feedback),
+  or Help & what's new in the app.
 
 ## Support the project
 
-OpenSuperWhisper is free forever — no Pro tier, no paywall. If it saves you time, you can
-[**buy the monkeys a banana on Ko-fi**](https://ko-fi.com/mymonkey): donations keep the nonprofit
+OpenSuperWhisper is free forever: no Pro tier, no paywall. If it saves you time, you can
+[**buy the monkeys a banana on Ko-fi**](https://ko-fi.com/mymonkey). Donations keep the nonprofit
 (association loi 1901) running and the open-source work alive. 🍌
 
 ## Building from source
@@ -156,21 +200,21 @@ gem install xcpretty
 ```
 
 If something breaks, `.github/workflows/build.yml` is the CI recipe that builds the app on every
-push. Maintainers: see [`docs/PUBLISHING.md`](docs/PUBLISHING.md) for the notarized-release +
+push. Maintainers: see [`docs/PUBLISHING.md`](docs/PUBLISHING.md) for the notarized release and
 Homebrew flow.
 
 </details>
 
 ## Contributing
 
-Contributions are welcome — issues, focused PRs, or big ideas
+Contributions are welcome: issues, focused PRs, or big ideas
 ([the last community batch](https://github.com/my-monkeys/OpenSuperWhisper/pull/21) shipped a whole
 menu of features). Open items live in the
 [issue tracker](https://github.com/my-monkeys/OpenSuperWhisper/issues).
 
 How the code is laid out: `OpenSuperWhisper/` is the macOS app (UI, audio capture, text insertion,
 shortcuts). `OpenSuperWhisperCore/` is a local Swift package with the transcription core shared with
-a future iPhone app: engines, model managers, LLM cleanup, recording storage and the queue. Its
+a future iPhone app: engines, model managers, AI cleanup, recording storage and the queue. Its
 native libraries (whisper.cpp, llama.cpp and their one ggml) come from the `libwhisper/` submodules
 and are built into `OpenSuperWhisperCore/Binaries/` by `Scripts/build-native.sh`, which `./run.sh
 build` calls for you. [`docs/core-extraction.md`](docs/core-extraction.md) explains the split.
@@ -193,12 +237,13 @@ Two other free, open-source apps from the same collective:
 
 | | |
 |---|---|
-| 🐒 **[Desktop Monkey](https://desktop-monkey.my-monkey.fr)** | A pixel-art monkey that lives on your desktop — he follows your cursor, hunts it, throws bananas at it and naps when you're away. Windows & macOS, one 6 MB file. ([source](https://github.com/my-monkeys/desktop-monkey)) |
+| 🐒 **[Desktop Monkey](https://desktop-monkey.my-monkey.fr)** | A pixel-art monkey that lives on your desktop: he follows your cursor, hunts it, throws bananas at it and naps when you're away. Windows and macOS, one 6 MB file. ([source](https://github.com/my-monkeys/desktop-monkey)) |
 | 📊 **[Claude Monitor](https://github.com/my-monkeys/claude-monitor)** | A macOS menu-bar app that counts your Claude Code instances and MCP servers, watches the per-user process limit and RAM, and kills a runaway swarm before it takes the Mac down. |
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Built on [whisper.cpp](https://github.com/ggerganov/whisper.cpp),
+MIT, see [LICENSE](LICENSE). Built on [whisper.cpp](https://github.com/ggerganov/whisper.cpp),
+[llama.cpp](https://github.com/ggerganov/llama.cpp),
 [FluidAudio](https://github.com/AntinomyCollective/FluidAudio),
 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) /
 [SenseVoice](https://github.com/FunAudioLLM/SenseVoice),
