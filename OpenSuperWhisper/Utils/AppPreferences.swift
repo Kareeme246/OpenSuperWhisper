@@ -522,10 +522,24 @@ final class AppPreferences {
     @OptionalUserDefault(key: "aiBackend")
     private var storedAIBackend: String?
 
-    /// Apple Intelligence for the language dictations are cleaned up in: English once Whisper has
-    /// translated them, the transcription language otherwise.
+    /// Apple Intelligence for the language dictations are cleaned up in.
     var appleIntelligenceAvailability: AppleIntelligenceAvailability {
-        AppleIntelligence.availability(language: translateToEnglish ? "en" : whisperLanguage)
+        AppleIntelligence.availability(language: Self.cleanupLanguage(
+            stored: whisperLanguage, translateToEnglish: translateToEnglish,
+            keyboardLanguage: { [self] in
+                KeyboardLanguage.current(engine: selectedEngine, fluidAudioModelVersion: fluidAudioModelVersion)
+            }))
+    }
+
+    /// The language a dictation reaches the cleanup in: English once Whisper has translated it,
+    /// otherwise the transcription language. "From keyboard layout" is stored as a selection
+    /// code, not a language, so it is resolved to the layout's language, and to nil (unknown,
+    /// like auto-detect) when the layout declares none the engine supports.
+    static func cleanupLanguage(stored: String, translateToEnglish: Bool,
+                                keyboardLanguage: () -> String?) -> String? {
+        if translateToEnglish { return "en" }
+        guard stored == KeyboardLanguage.selectionCode else { return stored }
+        return keyboardLanguage()
     }
 
     @UserDefault(key: "aiOllamaEndpoint", defaultValue: "http://localhost:11434")

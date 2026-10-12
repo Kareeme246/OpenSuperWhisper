@@ -112,4 +112,27 @@ final class AIBackendDefaultTests: XCTestCase {
         XCTAssertEqual(viewModel.aiBackend, "remote", "a choice doesn't follow the language")
         XCTAssertEqual(defaults.string(forKey: "aiBackend"), "remote")
     }
+
+    // MARK: - Language checked against Apple Intelligence
+
+    func testFromKeyboardLayoutIsResolvedBeforeTheLanguageCheck() {
+        let resolved = AppPreferences.cleanupLanguage(stored: KeyboardLanguage.selectionCode,
+                                                      translateToEnglish: false,
+                                                      keyboardLanguage: { "fr" })
+        XCTAssertEqual(resolved, "fr", "the selection code is not a language the model can be asked about")
+    }
+
+    func testALayoutWithNoSupportedLanguageCountsAsUnknown() {
+        XCTAssertNil(AppPreferences.cleanupLanguage(stored: KeyboardLanguage.selectionCode,
+                                                    translateToEnglish: false,
+                                                    keyboardLanguage: { nil }))
+    }
+
+    func testTranslationMeansEnglishAndAPlainLanguagePassesThrough() {
+        XCTAssertEqual(AppPreferences.cleanupLanguage(stored: KeyboardLanguage.selectionCode,
+                                                      translateToEnglish: true,
+                                                      keyboardLanguage: { "fr" }), "en")
+        XCTAssertEqual(AppPreferences.cleanupLanguage(stored: "de", translateToEnglish: false,
+                                                      keyboardLanguage: { "fr" }), "de")
+    }
 }
