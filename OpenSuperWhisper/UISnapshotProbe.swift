@@ -18,6 +18,15 @@ enum UISnapshotProbe {
         "dictionary-editor": { seedDictionary(openEditor: true); return AnyView(AppShellView(page: .dictionary)) },
         "style": { seedStyle(); return AnyView(AppShellView(page: .style)) },
         "style-expanded": { seedStyle(expandFirst: true); return AnyView(AppShellView(page: .style)) },
+        "settings-models-remote": {
+            let prefs = AppPreferences.shared
+            prefs.selectedEngine = "remote"
+            prefs.remoteServerURL = "https://api.groq.com/openai/v1"
+            prefs.remoteServerModel = "whisper-large-v3-turbo"
+            prefs.cachedRemoteModels = ["whisper-large-v3", "whisper-large-v3-turbo", "distil-whisper-large-v3-en"]
+            ModelSelectionStore.shared.refresh()
+            return AnyView(AppShellView(page: .home, settings: .models))
+        },
         "help": { AppNavigation.shared.helpOpen = true; return AnyView(AppShellView(page: .home)) },
         "onboarding": { AnyView(OnboardingView().environmentObject(AppState())) },
         "onboarding-2": { AnyView(OnboardingView(initialStep: .model).environmentObject(AppState())) },
