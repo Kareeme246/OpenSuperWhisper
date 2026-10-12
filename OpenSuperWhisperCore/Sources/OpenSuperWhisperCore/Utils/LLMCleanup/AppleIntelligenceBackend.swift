@@ -175,7 +175,9 @@ final class SystemOnDeviceModel: OnDeviceLanguageModel {
 
     func respond(instructions: String, prompt: String) async throws -> String {
         let session = LanguageModelSession(model: model, instructions: instructions)
-        let response = try await session.respond(to: prompt, options: GenerationOptions(samplingMode: .greedy))
+        // Temperature 0 rather than greedy sampling: the sampling option is labelled `sampling:` in
+        // the Xcode 26 SDK and `samplingMode:` in Xcode 27, while `temperature:` is the same in both.
+        let response = try await session.respond(to: prompt, options: GenerationOptions(temperature: 0))
         return response.content
     }
 }
