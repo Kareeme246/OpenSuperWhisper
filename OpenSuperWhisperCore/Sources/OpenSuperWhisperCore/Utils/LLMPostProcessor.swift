@@ -10,9 +10,9 @@ public protocol LLMCleanupBackend {
     var isReady: Bool { get }
     /// Whether `LLMPostProcessor` should apply its output-length ratio check to this backend's
     /// output (see `passesLengthGuard`). True only for the small built-in model, which is the one
-    /// weak enough to answer the transcription instead of transforming it. Ollama/Remote keep the
-    /// original blank-output-only check, so a user who repurposed the instruction on a big model
-    /// (condensing, expanding) isn't second-guessed.
+    /// weak enough to answer the transcription instead of transforming it. Ollama/Remote only get
+    /// the blank-output and prompt-echo checks, so a user who repurposed the instruction on a big
+    /// model (condensing, expanding) isn't second-guessed.
     var enforcesLengthRatio: Bool { get }
     func generate(system: String, user: String) async throws -> String
 }
@@ -100,6 +100,18 @@ public enum LLMPostProcessor {
             // an active app profile relaxes its shrink floor because those rules condense on
             // purpose — see `passesLengthGuard`.
             guard !result.isEmpty else { return text }
+            // Every backend, whatever the input length: a model with next to nothing to correct
+            // can answer with its own instructions, which would then be pasted (#147).
+            let shipped = shippedInstructions(generalCleanup: general,
+                                              generalPrompt: prefs.aiPostProcessingPrompt,
+                                              profile: prof,
+                                              closingPrompt: prefs.aiPostProcessingClosing,
+                                              translating: translating,
+                                              translationPrompt: prefs.aiPostProcessingTranslation)
+            if echoesPrompt(output: result, system: shipped, input: text) {
+                print("AI post-processing returned its own instructions, using the raw transcription")
+                return text
+            }
             if backend.enforcesLengthRatio,
                !passesLengthGuard(input: text, output: result, condensingAllowed: prof != nil) {
                 return text
@@ -182,6 +194,37 @@ public enum LLMPostProcessor {
     /// the guardrail would end up being the model's last word, which is exactly the position that
     /// decides how a small model behaves. An emptied half drops its section rather than being
     /// silently restored — replacing the shipped text wholesale is a supported use.
+    /// The parts of the system prompt the app itself wrote, as sent: the default halves, the
+    /// default translation section and the shipped app presets, each only when the user has not
+    /// rewritten it. The echo guard compares against these alone, so a reply that follows a
+    /// user's own instruction to insert fixed text is never mistaken for an echo; the price is
+    /// that an echo of a rewritten prompt goes undetected.
+    static func shippedInstructions(generalCleanup: Bool,
+                                    generalPrompt: String,
+                                    profile: AppContextProfile?,
+                                    closingPrompt: String,
+                                    translating: Bool,
+                                    translationPrompt: String) -> String {
+        func isShipped(_ text: String, _ shipped: [String]) -> Bool {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return shipped.contains { $0.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed }
+        }
+        var sections: [String] = []
+        if generalCleanup, isShipped(generalPrompt, [defaultInstruction]) {
+            sections.append(generalPrompt)
+        }
+        if translating, isShipped(translationPrompt, [defaultTranslationInstruction]) {
+            sections.append(translationPrompt)
+        }
+        if let profile, isShipped(profile.instructions, AppContextProfile.defaultPresets.map(\.instructions)) {
+            sections.append(profile.instructions)
+        }
+        if isShipped(closingPrompt, [defaultClosingInstruction]) {
+            sections.append(closingPrompt)
+        }
+        return sections.joined(separator: "\n\n")
+    }
+
     static func assembleSystemPrompt(generalCleanup: Bool,
                                      generalPrompt: String,
                                      profile: AppContextProfile?,
@@ -288,6 +331,112 @@ public enum LLMPostProcessor {
         if input.count < 20 { return true }
         let ratio = Double(trimmed.count) / Double(input.count)
         return ratio >= (condensingAllowed ? 0.05 : 0.3) && ratio <= 3.0
+    }
+
+    /// One run this long, shared with the prompt and not dictated, is an echo. About seven English
+    /// words: a correction does not reproduce that much of an instruction by chance.
+    static let echoRunLength = 40
+    /// A terse echo ("Output only the corrected text.") never reaches `echoRunLength`, so a reply
+    /// is also measured in fragments this long, short enough for a three-word phrase.
+    static let echoFragmentLength = 12
+    /// Share of a reply covered by such fragments that makes it an echo rather than a correction
+    /// borrowing a few of the prompt's words. A correction of a dictation that quotes the prompt
+    /// with one word changed leaves about half of it covered, hence a high bar.
+    static let echoCoverageThreshold = 0.8
+    /// Share of a reply's words the user did not say before its fragment coverage counts. A
+    /// faithful cleanup reuses the dictated words, and when the prompt shows the same conversion
+    /// as an example (the Terminal preset's "cat readme dot md" → cat readme.md) its output is
+    /// prompt text from end to end; an echo brings in the prompt's own words.
+    static let echoNewWordShare = 0.5
+
+    /// Whether `output` repeats the system prompt it was sent with instead of correcting `input`:
+    /// either a run of `echoRunLength` characters taken from the prompt that holds a word the user
+    /// did not say, or a reply made mostly of prompt fragments and mostly of undictated words.
+    /// Text the user dictated never counts, so quoting the prompt is safe.
+    ///
+    /// Compared after `echoNormalized`, so a reply that recased or repunctuated the instruction
+    /// still matches it. `process` passes only the instructions the app ships
+    /// (`shippedInstructions`), never text the user wrote: a custom prompt or app rule may ask for
+    /// a fixed sign-off ("End with: Best regards, …"), and that sign-off in the reply is the
+    /// prompt being followed, not echoed.
+    static func echoesPrompt(output: String, system: String, input: String) -> Bool {
+        let dictated = echoNormalized(input)
+        let reply = EchoReply(echoNormalized(output), dictated: dictated)
+        let prompt = echoNormalized(system)
+
+        func echoedStarts(length: Int) -> [Int] {
+            guard reply.characters.count >= length else { return [] }
+            let fromPrompt = windows(of: prompt, length: length)
+            let fromInput = windows(of: dictated, length: length)
+            return (0...(reply.characters.count - length)).filter { start in
+                let window = String(reply.characters[start..<start + length])
+                return fromPrompt.contains(window) && !fromInput.contains(window)
+            }
+        }
+
+        if echoedStarts(length: echoRunLength).contains(where: {
+            reply.hasNewWord(in: $0..<$0 + echoRunLength)
+        }) { return true }
+
+        guard reply.newWordShare >= echoNewWordShare else { return false }
+        var covered = [Bool](repeating: false, count: reply.characters.count)
+        for start in echoedStarts(length: echoFragmentLength) {
+            covered.replaceSubrange(start..<start + echoFragmentLength,
+                                    with: repeatElement(true, count: echoFragmentLength))
+        }
+        guard !covered.isEmpty else { return false }
+        return Double(covered.filter { $0 }.count) / Double(covered.count) >= echoCoverageThreshold
+    }
+
+    /// A normalised reply cut into words, each marked new when the dictation does not contain it.
+    private struct EchoReply {
+        let characters: [Character]
+        private let words: [(range: Range<Int>, isNew: Bool)]
+
+        init(_ characters: [Character], dictated: [Character]) {
+            self.characters = characters
+            let dictatedWords = Set(dictated.split(separator: " ").map { String($0) })
+            var words: [(range: Range<Int>, isNew: Bool)] = []
+            var start = 0
+            while start < characters.count {
+                let end = characters[start...].firstIndex(of: " ") ?? characters.count
+                words.append((start..<end, !dictatedWords.contains(String(characters[start..<end]))))
+                start = end + 1
+            }
+            self.words = words
+        }
+
+        var newWordShare: Double {
+            words.isEmpty ? 0 : Double(words.filter(\.isNew).count) / Double(words.count)
+        }
+
+        /// Overlapping rather than contained: scripts written without spaces make one word of a
+        /// whole clause, longer than any window.
+        func hasNewWord(in window: Range<Int>) -> Bool {
+            words.contains { $0.isNew && $0.range.overlaps(window) }
+        }
+    }
+
+    /// Case, accents, width and punctuation folded away, every run of anything else than letters,
+    /// marks and digits reduced to one space.
+    static func echoNormalized(_ text: String) -> [Character] {
+        let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                                  locale: nil)
+        var result: [Character] = []
+        for scalar in folded.unicodeScalars {
+            if CharacterSet.alphanumerics.contains(scalar) {
+                result.append(Character(scalar))
+            } else if let last = result.last, last != " " {
+                result.append(" ")
+            }
+        }
+        if result.last == " " { result.removeLast() }
+        return result
+    }
+
+    private static func windows(of characters: [Character], length: Int) -> Set<String> {
+        guard characters.count >= length else { return [] }
+        return Set((0...(characters.count - length)).map { String(characters[$0..<$0 + length]) })
     }
 
     // MARK: - Connection tests (settings "Test" button)
