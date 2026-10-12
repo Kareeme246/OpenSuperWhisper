@@ -281,7 +281,8 @@ struct AgentPanelView: View {
     /// The explanation and the command, as one selectable text: the command is what gets copied.
     private func permissionDetails(for request: AgentRequest) -> [MarkdownBlock] {
         var blocks: [MarkdownBlock] = []
-        if !request.message.isEmpty { blocks.append(.paragraph(request.message)) }
+        // Plain text from the hook, not Markdown: a glob like src/**/*.swift must keep its stars.
+        if !request.message.isEmpty { blocks.append(.paragraph(MarkdownView.literal(request.message))) }
         if let detail = request.toolDetail, !detail.isEmpty { blocks.append(.code(language: "", text: detail)) }
         return blocks
     }

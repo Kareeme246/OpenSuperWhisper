@@ -35,6 +35,17 @@ struct MarkdownView: NSViewRepresentable {
         return CGSize(width: width, height: nsView.height(forWidth: width))
     }
 
+    /// `text` escaped so the Markdown parser shows it as written: every ASCII punctuation mark a
+    /// Markdown span could start with gets a backslash.
+    static func literal(_ text: String) -> String {
+        var out = ""
+        for character in text {
+            if "\\`*_{}[]()#+-.!~<>|".contains(character) { out.append("\\") }
+            out.append(character)
+        }
+        return out
+    }
+
     /// Inline styling for a single line drawn by SwiftUI, with code spans set on a light fill.
     static func inline(_ text: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(
@@ -104,14 +115,20 @@ final class MarkdownTextView: NSTextView {
 
     func height(forWidth width: CGFloat) -> CGFloat {
         guard let container = textContainer, let layout = layoutManager else { return 0 }
-        container.size = NSSize(width: width, height: .greatestFiniteMagnitude)
+        // Setting the same size still invalidates the layout, and SwiftUI asks on every keystroke
+        // in the reply field: only a real width change should lay the reply out again.
+        if container.size.width != width {
+            container.size = NSSize(width: width, height: .greatestFiniteMagnitude)
+        }
         layout.ensureLayout(for: container)
         return ceil(layout.usedRect(for: container).height)
     }
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
-        textContainer?.size = NSSize(width: newSize.width, height: .greatestFiniteMagnitude)
+        if let container = textContainer, container.size.width != newSize.width {
+            container.size = NSSize(width: newSize.width, height: .greatestFiniteMagnitude)
+        }
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -120,7 +137,8 @@ final class MarkdownTextView: NSTextView {
     /// The app may have no Edit menu to route ⌘A and ⌘C here, so the view answers them itself.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard window?.firstResponder === self,
-              event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command else {
+              // Caps Lock is part of the mask but changes nothing about the shortcut.
+              event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock) == .command else {
             return super.performKeyEquivalent(with: event)
         }
         switch event.charactersIgnoringModifiers {

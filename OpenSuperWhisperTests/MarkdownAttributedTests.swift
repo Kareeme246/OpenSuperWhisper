@@ -141,4 +141,10 @@ final class MarkdownAttributedTests: XCTestCase {
                                   effectiveRange: nil) as? NSFont
         XCTAssertGreaterThan(heading?.pointSize ?? 0, body?.pointSize ?? 0)
     }
+
+    func testALiteralPermissionMessageKeepsItsMarkdownCharacters() {
+        let message = "Run swiftlint on src/**/*.swift and _build_ (see [docs])"
+        let literal = MarkdownView.literal(message)
+        XCTAssertEqual(String(MarkdownView.inline(literal).characters), message)
+    }
 }
