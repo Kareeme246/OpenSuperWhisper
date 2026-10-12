@@ -49,6 +49,7 @@ final class TextScaleCoverageTests: XCTestCase {
         "Agents/AgentPanelParts.swift",
         "Agents/AgentRecordingControls.swift",
         "Agents/MarkdownView.swift",
+        "Agents/MarkdownAttributed.swift",
     ]
 
     /// Every window's own text, in the files that draw it.

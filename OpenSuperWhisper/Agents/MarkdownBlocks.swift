@@ -2,8 +2,8 @@ import Foundation
 
 /// The block structure of an agent's Markdown reply. SwiftUI's `Text` only does inline Markdown
 /// (bold, code, links), so headings, lists, code blocks and above all tables came out as raw
-/// pipes and hashes. This splits the reply into blocks that `MarkdownView` lays out; inline
-/// styling inside each block is still left to `AttributedString`.
+/// pipes and hashes. This splits the reply into blocks that `MarkdownAttributed` lays out as one
+/// text; inline styling inside each block is still left to Foundation's Markdown parser.
 enum MarkdownBlock: Equatable {
     case heading(level: Int, text: String)
     case paragraph(String)

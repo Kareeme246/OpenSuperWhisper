@@ -32,9 +32,11 @@ final class AgentPanelController {
             let isReturn = event.keyCode == 36 || event.keyCode == 76  // Return, keypad Enter
             guard isReturn, event.window is AgentPanel else { return event }
             // The field does not break the line on ⇧Return either, so the break is typed here,
-            // at the caret, through the field's own text view.
+            // at the caret, through the field's own text view (not the read-only reply above it).
             if event.modifierFlags.contains(.shift) {
-                (event.window?.firstResponder as? NSTextView)?.insertNewlineIgnoringFieldEditor(nil)
+                if let field = event.window?.firstResponder as? NSTextView, field.isEditable {
+                    field.insertNewlineIgnoringFieldEditor(nil)
+                }
                 return nil
             }
             guard let request = AgentInbox.shared.current else { return event }
@@ -268,24 +270,20 @@ struct AgentPanelView: View {
             Text("Wants to use **\(request.tool ?? "a tool")**")
                 .scaledFont(size: 14)
                 .foregroundColor(STheme.text)
-            if !request.message.isEmpty {
-                Text(request.message)
-                    .scaledFont(size: 13)
-                    .foregroundColor(STheme.hint)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let detail = request.toolDetail, !detail.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    Text(detail)
-                        .scaledFont(size: 12.5, design: .monospaced)
-                        .foregroundColor(STheme.textBright)
-                        .textSelection(.enabled)
-                        .padding(12)
-                }
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(STheme.fill))
+            let details = permissionDetails(for: request)
+            if !details.isEmpty {
+                MarkdownView(blocks: details, prose: .secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The explanation and the command, as one selectable text: the command is what gets copied.
+    private func permissionDetails(for request: AgentRequest) -> [MarkdownBlock] {
+        var blocks: [MarkdownBlock] = []
+        if !request.message.isEmpty { blocks.append(.paragraph(request.message)) }
+        if let detail = request.toolDetail, !detail.isEmpty { blocks.append(.code(language: "", text: detail)) }
+        return blocks
     }
 
     private func questionContent(for request: AgentRequest) -> some View {
@@ -302,6 +300,7 @@ struct AgentPanelView: View {
                         .scaledFont(size: 14.5, weight: .medium)
                         .foregroundColor(STheme.textBright)
                         .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
                     ForEach(question.options, id: \.label) { option in
                         optionRow(option, question: question, request: request)
                     }

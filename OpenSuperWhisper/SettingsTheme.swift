@@ -29,6 +29,8 @@ enum STheme {
     /// Text and glyphs drawn on an accent fill.
     static let onAccent = dyn(dark: hex(0x2A1A12), light: hex(0xFFF8F2))
     static let accentPressed = dyn(dark: hex(0xC9653E), light: hex(0x84371F))
+    /// Selected text. Strong enough to read on `fill` too: the system's grey vanished on code.
+    static let textSelection = dyn(dark: hex(0xE0754A, 0.45), light: hex(0xE0754A, 0.32))
 
     // MARK: Surfaces
 
