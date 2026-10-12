@@ -36,6 +36,7 @@ load: /System/Library/Frameworks/CoreML.framework/Versions/A/CoreML
 load: /System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia
 load: /System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices
 load: /System/Library/Frameworks/Foundation.framework/Versions/C/Foundation
+load: /System/Library/Frameworks/FoundationModels.framework/Versions/A/FoundationModels
 load: /System/Library/Frameworks/Metal.framework/Versions/A/Metal
 load: /System/Library/Frameworks/MetalKit.framework/Versions/A/MetalKit
 load: /System/Library/Frameworks/NaturalLanguage.framework/Versions/A/NaturalLanguage
