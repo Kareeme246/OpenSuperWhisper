@@ -20,7 +20,7 @@ struct TextAndAIRubric: View {
         entry("Custom hesitations", advanced: true, keywords: "regex pattern filler hésitations personnalisées"),
         entry("Automatic spaces and capitals", keywords: "capitalization espaces majuscules automatiques"),
         entry("Format with AI", keywords: "LLM cleanup clean up mise en forme IA nettoyage"),
-        entry("AI engine", keywords: "backend Qwen Ollama remote server built-in moteur IA serveur"),
+        entry("AI engine", keywords: "backend Qwen Ollama remote server built-in apple intelligence foundation model on-device moteur IA serveur"),
         entry("Opening instruction", advanced: true, keywords: "prompt system instruction d'ouverture"),
         entry("When translating", advanced: true, keywords: "translation prompt traduction"),
         entry("Closing instruction", advanced: true, keywords: "prompt guardrail instruction de fin"),

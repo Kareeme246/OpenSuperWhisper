@@ -390,6 +390,8 @@ final class DefaultsKeySnapshotTests: XCTestCase {
         XCTAssertEqual(prefs.removeFillerWords, false)
         XCTAssertEqual(prefs.fillerWordsPattern, "\\b(um|uh|uh huh|er|ah|hmm|mm)\\b,?\\s*")
         XCTAssertEqual(prefs.aiPostProcessingEnabled, false)
+        // On a Mac without Apple Intelligence, which `ScratchPreferences` pins: where it runs, the
+        // unset key resolves to "apple" instead (`AIBackendDefaultTests`).
         XCTAssertEqual(prefs.aiBackend, "ollama")
         XCTAssertEqual(prefs.aiOllamaEndpoint, "http://localhost:11434")
         XCTAssertEqual(prefs.aiOllamaModel, "llama3.2")

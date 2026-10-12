@@ -172,12 +172,14 @@ class SettingsViewModel: ObservableObject {
             // Single mutation point (LanguageStore) — persists + notifies the menu. Idempotent,
             // so the menu→Settings sync setting this back to the same value is a harmless no-op.
             MainActor.assumeIsolated { LanguageStore.shared.select(selectedLanguage) }
+            refreshResolvedAIBackend()
         }
     }
 
     @Published var translateToEnglish: Bool {
         didSet {
             MainActor.assumeIsolated { TranslateStore.shared.set(translateToEnglish) }
+            refreshResolvedAIBackend()
         }
     }
 
@@ -433,16 +435,28 @@ class SettingsViewModel: ObservableObject {
     /// the same backend, so this is what gates the backend UI and its connection probe.
     var llmCleanupInUse: Bool { aiPostProcessingEnabled || appContextFormattingEnabled }
 
-    /// Cleanup backend: "builtin" (embedded llama.cpp), "ollama" (local server), or
-    /// "remote" (OpenAI-compatible server).
+    /// Cleanup backend: "builtin" (embedded llama.cpp), "ollama" (local server), "remote"
+    /// (OpenAI-compatible server), or "apple" (Apple Intelligence, on-device).
     @Published var aiBackend: String {
         didSet {
+            guard !isSyncing else { return }
             AppPreferences.shared.aiBackend = aiBackend
             if llmCleanupInUse { testLLMConnection() }
             // Warm the ~1 GB context now, while the user is here in Settings, so their first
             // dictation doesn't wait several seconds for it. Released again after an idle spell.
             if aiBackend == "builtin" { BuiltInLlamaBackend.shared.preload() }
         }
+    }
+
+    /// An engine the user never picked resolves to Apple Intelligence only for languages it
+    /// supports, so changing the dictation language can change it. Shown again without storing
+    /// it: the user still hasn't chosen.
+    private func refreshResolvedAIBackend() {
+        let resolved = AppPreferences.shared.aiBackend
+        guard resolved != aiBackend else { return }
+        isSyncing = true
+        aiBackend = resolved
+        isSyncing = false
     }
 
     /// Which built-in GGUF the local backend uses. The models differ enough in ability that this

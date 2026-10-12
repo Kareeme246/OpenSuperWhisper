@@ -2,7 +2,8 @@ import SwiftUI
 import OpenSuperWhisperCore
 
 /// The fields of the chosen AI engine: the built-in model and its download, Ollama's model and
-/// endpoint, or the remote server. Then the connection status for the two that have a server.
+/// endpoint, the remote server, or whether Apple Intelligence can run. Then the connection status
+/// for the two that have a server.
 struct TextAIBackendFields: View {
     @ObservedObject var viewModel: SettingsViewModel
 
@@ -10,6 +11,8 @@ struct TextAIBackendFields: View {
         switch viewModel.aiBackend {
         case "builtin":
             builtInFields
+        case "apple":
+            appleFields
         case "remote":
             RemoteCleanupSettingsView(viewModel: viewModel)
             statusLine
@@ -76,6 +79,24 @@ struct TextAIBackendFields: View {
     private var shortModelName: String {
         let name = LLMModelManager.model(fileName: viewModel.builtInModelFileName).displayName
         return name.components(separatedBy: " Instruct").first ?? name
+    }
+
+    // MARK: Apple Intelligence
+
+    @ViewBuilder private var appleFields: some View {
+        let availability = AppPreferences.shared.appleIntelligenceAvailability
+        if let notice = TextAIAppleIntelligence.unavailableNotice(availability) {
+            TextAILine(indented: true) {
+                TextAIFootnote(notice, color: STheme.warn)
+            }
+        } else {
+            TextAILine(indented: true) {
+                TextAIOKPill("✓ Ready, runs on this Mac")
+                TextAIFootnote("Nothing to download. A dictation too long for the model is inserted without cleanup.")
+                    .layoutPriority(1)
+                Spacer(minLength: 0)
+            }
+        }
     }
 
     // MARK: Ollama

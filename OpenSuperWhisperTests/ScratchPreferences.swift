@@ -15,15 +15,21 @@ import Foundation
 /// processes the scheme runs in parallel. Naming accounts therefore also takes a lock across
 /// processes until `restore()`, or two tests writing the same account would read each other's
 /// value.
+///
+/// The fresh install is one on a Mac without Apple Intelligence: an unset AI engine resolves to
+/// Apple's model wherever it runs, so the defaults the suite pins would otherwise depend on the
+/// machine. A test that wants it available replaces the model again.
 final class ScratchPreferences {
 
     private let suiteName = DefaultsStore.testSuiteName(for: ProcessInfo.processInfo.processIdentifier)
     private let savedDomain: [String: Any]?
     private let savedSecrets: [String: String?]
     private let keychainLock: KeychainLock?
+    private let savedOnDeviceModel: (any OnDeviceLanguageModel)?
 
     init(keychainAccounts: [String] = []) {
         keychainLock = keychainAccounts.isEmpty ? nil : KeychainLock()
+        savedOnDeviceModel = AppleIntelligence.replaceModelForTesting(FixedOnDeviceModel(availability: .unsupportedMac))
         savedDomain = DefaultsStore.current.persistentDomain(forName: suiteName)
         savedSecrets = Dictionary(uniqueKeysWithValues: keychainAccounts.map { ($0, Keychain.read($0)) })
         wipe()
@@ -48,6 +54,7 @@ final class ScratchPreferences {
         for (account, value) in savedSecrets {
             Keychain.set(value, for: account)
         }
+        AppleIntelligence.replaceModelForTesting(savedOnDeviceModel)
         keychainLock?.release()
     }
 }
