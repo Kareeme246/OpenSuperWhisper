@@ -63,6 +63,16 @@ enum UISnapshotProbe {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         NSApplication.shared.setActivationPolicy(.prohibited)
         AppPreferences.shared.hasCompletedOnboarding = true
+        // OSW_SNAPSHOT_DEMO=1: a ready app on Parakeet v3, for the README's screenshots.
+        if ProcessInfo.processInfo.environment["OSW_SNAPSHOT_DEMO"] != nil {
+            PermissionsManager.snapshotGrantsAll = true
+            AppPreferences.shared.selectedEngine = "fluidaudio"
+            AppPreferences.shared.fluidAudioModelVersion = "v3"
+            var triggers = RecordingTriggerSet.load(from: AppPreferences.shared.recordingTriggers)
+            triggers.triggers = [.modifier(.rightOption)]
+            AppPreferences.shared.recordingTriggers = triggers.json
+            ModelSelectionStore.shared.refresh()
+        }
         seedRecordings()
 
         var all = screens
@@ -112,7 +122,19 @@ enum UISnapshotProbe {
             host.layoutSubtreeIfNeeded()
             RunLoop.main.run(until: Date().addingTimeInterval(0.15))
         }
-        guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
+        // OSW_SNAPSHOT_SCALE=2 draws at Retina density, whatever screen this runs on.
+        let scale = Double(ProcessInfo.processInfo.environment["OSW_SNAPSHOT_SCALE"] ?? "") ?? 0
+        let rep: NSBitmapImageRep
+        if scale > 0, let custom = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale), pixelsHigh: Int(size.height * scale),
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) {
+            custom.size = size
+            rep = custom
+        } else {
+            guard let cached = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
+            rep = cached
+        }
         host.cacheDisplay(in: host.bounds, to: rep)
         try? rep.representation(using: .png, properties: [:])?.write(to: url)
         window.close()
