@@ -118,6 +118,25 @@ final class InsertionDiagnosticsTests: XCTestCase {
         XCTAssertTrue(line.contains("total=0us"))
     }
 
+    /// The key the paste pressed depends on the keyboard layout (#161), and a paste that turned
+    /// into some other shortcut is explained by that number, so the paste line carries it.
+    func testPastingReportsTheKeyItPressed() {
+        let line = TextInserter.insertionLogLine(
+            app: "com.apple.Notes", dictatedInto: "com.apple.Notes", rule: "none",
+            mechanism: "paste", targetLength: nil, caret: nil,
+            payload: 12, chunks: 1, pause: 0, pasteKeyCode: 0x2F)
+
+        XCTAssertTrue(line.hasSuffix(" key=0x2F"), line)
+    }
+
+    func testTypingReportsNoPasteKey() {
+        let line = TextInserter.insertionLogLine(
+            app: "x", dictatedInto: "x", rule: "none", mechanism: "type",
+            targetLength: nil, caret: nil, payload: 10, chunks: 1, pause: 0)
+
+        XCTAssertFalse(line.contains("key="))
+    }
+
     /// A clip recorded before the app was known still logs, rather than dropping the line.
     func testAnUnknownDictatedAppSaysSo() {
         let line = TextInserter.insertionLogLine(

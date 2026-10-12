@@ -109,3 +109,115 @@ final class KeyboardLayoutProvider {
         return Unmanaged<CFString>.fromOpaque(idPtr).takeUnretainedValue() as String
     }
 }
+
+// MARK: - The key that pastes
+
+extension KeyboardLayoutProvider {
+
+    /// Where V sits on a US board (kVK_ANSI_V). Also the answer whenever the layout cannot be
+    /// read or has no key for "v", which is the behavior every layout had before this lookup.
+    static let qwertyPasteKeyCode: CGKeyCode = 0x09
+
+    /// The key code to post with ⌘ for a paste in the layout described by `layoutData`.
+    ///
+    /// Apps match ⌘V by the character the key produces in the active layout, not by its position,
+    /// so a fixed 0x09 is K on Dvorak and opens Notes' link sheet instead of pasting (#161).
+    static func pasteKeyCode(layoutData: CFData?, keyboardType: UInt32) -> CGKeyCode {
+        guard let layoutData,
+              let keyCode = commandKeyCode(producing: "v", layoutData: layoutData,
+                                           keyboardType: keyboardType)
+        else { return qwertyPasteKeyCode }
+        return keyCode
+    }
+
+    /// The key that types `character` while only ⌘ is held, or nil when no key does.
+    ///
+    /// Translated with ⌘ down rather than bare, because that is what the shortcut sees: the
+    /// "Dvorak - QWERTY ⌘" layouts go back to QWERTY positions while ⌘ is held, and the
+    /// non-Latin layouts (Russian, Greek, Hebrew, …) produce Latin letters there. Only the
+    /// unshifted state is searched: a key that needs Shift for the letter would turn the paste
+    /// into ⌘⇧V, which is Paste and Match Style. 0x09 wins a tie, so a layout that already
+    /// worked keeps the exact key it had.
+    static func commandKeyCode(producing character: Character, layoutData: CFData,
+                               keyboardType: UInt32) -> CGKeyCode? {
+        guard let bytes = CFDataGetBytePtr(layoutData) else { return nil }
+        let layout = UnsafeRawPointer(bytes).assumingMemoryBound(to: UCKeyboardLayout.self)
+        let commandOnly = UInt32((cmdKey >> 8) & 0xFF)
+        let target = String(character)
+
+        func produces(_ keyCode: CGKeyCode) -> Bool {
+            var deadKeyState: UInt32 = 0
+            var chars = [UniChar](repeating: 0, count: 4)
+            var length = 0
+            let status = UCKeyTranslate(layout, keyCode, UInt16(kUCKeyActionDown), commandOnly,
+                                        keyboardType, OptionBits(kUCKeyTranslateNoDeadKeysMask),
+                                        &deadKeyState, chars.count, &length, &chars)
+            return status == noErr && String(utf16CodeUnits: chars, count: length) == target
+        }
+
+        if produces(qwertyPasteKeyCode) { return qwertyPasteKeyCode }
+        return (0..<128).map(CGKeyCode.init).first(where: produces)
+    }
+
+    /// The Unicode layout data of the layout typing would use right now. An input method
+    /// (Japanese, Chinese, …) reports the Latin layout it types with.
+    static func currentLayoutData() -> CFData? {
+        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+              let ptr = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
+        else { return nil }
+        return Unmanaged<CFData>.fromOpaque(ptr).takeUnretainedValue()
+    }
+
+    /// The paste key for the current layout, resolved once per input source change.
+    func pasteKeyCode() -> CGKeyCode {
+        PasteKeyCodeCache.shared.keyCode
+    }
+}
+
+/// Holds the resolved paste key until the selected input source changes.
+final class PasteKeyCodeCache: NSObject {
+
+    static let shared = PasteKeyCodeCache()
+
+    private let center: DistributedNotificationCenter
+    private let resolve: () -> CGKeyCode
+    private let lock = NSLock()
+    private var cached: CGKeyCode?
+
+    init(center: DistributedNotificationCenter = .default(),
+         changeNotification: Notification.Name =
+            Notification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
+         resolve: @escaping () -> CGKeyCode = {
+            KeyboardLayoutProvider.pasteKeyCode(layoutData: KeyboardLayoutProvider.currentLayoutData(),
+                                                keyboardType: UInt32(LMGetKbdType()))
+         }) {
+        self.center = center
+        self.resolve = resolve
+        super.init()
+        // Delivered immediately, because the app is almost never active when it pastes: the
+        // default behavior holds distributed notifications back while the app is in the
+        // background, and the cache would still hold the previous layout's key at paste time.
+        center.addObserver(self, selector: #selector(inputSourceChanged),
+                           name: changeNotification, object: nil,
+                           suspensionBehavior: .deliverImmediately)
+    }
+
+    deinit {
+        center.removeObserver(self)
+    }
+
+    var keyCode: CGKeyCode {
+        lock.lock()
+        defer { lock.unlock() }
+        if let cached { return cached }
+        let resolved = resolve()
+        cached = resolved
+        return resolved
+    }
+
+    @objc private func inputSourceChanged() {
+        lock.lock()
+        cached = nil
+        lock.unlock()
+    }
+}
