@@ -37,8 +37,10 @@ struct AgentListeningLine: View {
 }
 
 /// The live transcript in the bar's own height: the newest words on the last line, older ones
-/// pushed up and out under a short fade, the way the bubble's caption scrolls. It never grows
-/// the bar; a larger text size shows one line instead of two.
+/// pushed up and out under a short fade, the way the bubble's caption scrolls. Across the app's
+/// own text sizes it never grows the bar: a larger size shows one line instead of two. One line
+/// is the floor, so when the system's text size is raised on top of the app's and a single line
+/// is taller than the row, the row grows rather than cut the glyphs in half.
 struct AgentLiveTranscript: View {
     let caption: AgentLiveCaption
 
@@ -122,7 +124,8 @@ struct AgentLiveCaption: Equatable {
         return String(cut[space...]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// How many lines fit the row without making it taller, two at most and never none.
+    /// How many lines fit the row without making it taller, two at most and never none: a
+    /// single line taller than the row still shows, whole.
     static func visibleLines(lineHeight: CGFloat, room: CGFloat) -> Int {
         guard lineHeight > 0 else { return maxLines }
         return min(maxLines, max(1, Int((room / lineHeight).rounded(.down))))

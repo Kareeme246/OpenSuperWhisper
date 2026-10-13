@@ -64,6 +64,12 @@ final class AgentLiveCaptionTests: XCTestCase {
         XCTAssertEqual(AgentLiveCaption.visibleLines(lineHeight: 60, room: AgentRecordingControls.size), 1)
     }
 
+    /// The system text size multiplies the app's, so a line can end up taller than the row. It
+    /// still shows whole, and the row grows: half-cut glyphs would read worse.
+    func testOneLineIsTheFloorWhenALineIsTallerThanTheRow() {
+        XCTAssertEqual(AgentLiveCaption.visibleLines(lineHeight: 37, room: 36), 1)
+    }
+
     func testNeverMoreThanTwoLines() {
         XCTAssertEqual(AgentLiveCaption.visibleLines(lineHeight: 8, room: 36), 2)
     }
