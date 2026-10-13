@@ -18001,22 +18001,32 @@
         }
       }
     },
-    "The same setting as in System Settings › Sound.": {
+    "Set input volume to maximum": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le même réglage que dans Réglages Système › Son."
+            "value": "Mettre le volume d'entrée au maximum"
           }
         }
       }
     },
-    "macOS doesn't let apps change this microphone's volume. Check it in Sound settings.": {
+    "The same setting as in System Settings → Sound.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "macOS ne laisse pas les apps régler le volume de ce micro. Vérifiez-le dans les réglages Son."
+            "value": "Le même réglage que dans Réglages Système → Son."
+          }
+        }
+      }
+    },
+    "This microphone's volume can't be changed from the app. Check it in Sound settings.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le volume de ce micro ne se règle pas depuis l'app. Vérifiez-le dans les réglages Son."
           }
         }
       }

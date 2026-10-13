@@ -150,12 +150,10 @@ struct MicrophoneLevelRow: View {
     @ObservedObject private var monitor = InputLevelMonitor.shared
     @ObservedObject private var volume = InputVolumeModel.shared
 
-    private static let barWidth: CGFloat = 200
-
     var body: some View {
         SettingRow("Input level", hint: "Speak to test your microphone.", indented: true) {
             MicrophoneLevelMeter(reading: monitor.reading)
-                .frame(width: Self.barWidth)
+                .frame(width: MicrophoneVolumeRow.controlWidth)
         }
         .monitorsInputLevel(of: microphone)
         MicrophoneVolumeRow(model: volume)
@@ -176,6 +174,7 @@ struct MicrophoneLevelRow: View {
             if remedy == .setToMaximum {
                 Button("Set to maximum", action: volume.setToMaximum)
                     .buttonStyle(.sSecondary)
+                    .accessibilityLabel(Text("Set input volume to maximum"))
             }
         }
         .padding(.leading, 34)

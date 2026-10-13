@@ -62,6 +62,8 @@ struct QuietInputRemedyLink: View {
             }
             .buttonStyle(.plain)
             .fixedSize()
+            // The volume's own header is hidden from VoiceOver, so the button says what it raises.
+            .accessibilityLabel(Text("Set input volume to maximum"))
         }
     }
 }
@@ -80,7 +82,7 @@ struct MicrophoneVolumeSection: View {
                     .foregroundColor(STheme.hint)
                     .accessibilityHidden(true)
                 InputVolumeSlider(model: model, trackWidth: nil)
-                Text("The same setting as in System Settings › Sound.")
+                Text("The same setting as in System Settings → Sound.")
                     .scaledFont(size: 12)
                     .foregroundColor(STheme.hint)
                     .fixedSize(horizontal: false, vertical: true)
@@ -96,14 +98,21 @@ struct MicrophoneVolumeSection: View {
 struct MicrophoneVolumeRow: View {
     @ObservedObject var model: InputVolumeModel
 
+    /// Shared with the level bar above, so the two read as a pair: both start and end at the same
+    /// x. Wide enough for Settings' usual 180 pt track beside its value.
+    static let controlWidth: CGFloat = 244
+
     var body: some View {
         if model.isSettable {
-            SettingRow("Input volume", hint: "The same setting as in System Settings › Sound.", indented: true) {
-                InputVolumeSlider(model: model)
+            SettingRow("Input volume", hint: "The same setting as in System Settings → Sound.", indented: true) {
+                // The track takes what the value leaves, so a larger text size cannot shift its start.
+                InputVolumeSlider(model: model, trackWidth: nil)
+                    .frame(width: Self.controlWidth)
             }
         } else {
+            // True whether macOS keeps the volume to itself or the microphone has none at all.
             SettingRow("Input volume",
-                       hint: "macOS doesn't let apps change this microphone's volume. Check it in Sound settings.",
+                       hint: "This microphone's volume can't be changed from the app. Check it in Sound settings.",
                        indented: true) {
                 SoundSettingsLink(size: 13)
             }
