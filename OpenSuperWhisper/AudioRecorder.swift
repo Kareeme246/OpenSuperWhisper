@@ -271,11 +271,12 @@ class AudioRecorder: NSObject, ObservableObject {
 
     /// How many channels to ask the recorder for. A multi-input interface (an Audient EVO 4: two
     /// mics and two loopback) can carry the speech on any one of its inputs, so all of them are
-    /// recorded and the converter mixes the ones with signal. The built-in mic array is the
-    /// opposite case: its three channels are raw capsules that came out 25-30 dB too quiet for
-    /// Parakeet and Whisper. One channel is asked for in the hope that macOS hands over a
-    /// processed mono; whether it does is still to be measured on a real take, and the core
-    /// lifts a clip that is still too quiet either way (`QuietClipGain`).
+    /// recorded and the converter mixes the ones with signal. The built-in mic is the opposite
+    /// case. It normally reports one processed channel, but a stuck coreaudiod (seen on a macOS
+    /// 27.2 beta, cleared by restarting it) made it report three raw capsules that recorded
+    /// 25-30 dB too quiet, and System Settings' own meter barely moved either. One channel is
+    /// enough for speech in both states, and the core lifts a clip that is still too quiet
+    /// (`QuietClipGain`).
     static func recordingChannelCount(isBuiltIn: Bool, reportedChannels: Int) -> Int {
         isBuiltIn ? 1 : max(reportedChannels, 1)
     }
