@@ -284,6 +284,10 @@ class IndicatorViewModel: ObservableObject {
         // off. A very short clip can come back empty from the offline file pass even when the
         // sliding-window preview caught it — the pipeline uses this as its fallback. (#short-dictation)
         stopWatchingForStopPhrase()
+        // Disarmed before any early return below: a take dropped as too short or empty would
+        // otherwise leave the panel listening, and the next dictation, wherever it is aimed,
+        // would mirror its words there and be sent to the agent as the reply.
+        let agentReplyID = AgentInbox.shared.takeArmedReply()
         var streamedFallback = ""
         if liveStreamingActive {
             liveStreamingActive = false
@@ -328,7 +332,7 @@ class IndicatorViewModel: ObservableObject {
             windowTitle: ctx.windowTitle, fullURL: ctx.fullURL,
             keyboardLanguage: ctx.keyboardLanguage,
             focusedText: ctx.focusedText,
-            agentReplyID: AgentInbox.shared.takeArmedReply())
+            agentReplyID: agentReplyID)
         let modelOption = ModelCatalog.activeOption()
 
         // Hand the clip to the background pipeline: it transcribes, saves and pastes on a serial

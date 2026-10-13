@@ -80,6 +80,14 @@ enum UISnapshotProbe {
         "agent-panel-draft": { AgentPanelSnapshot.make(draft: "Yes, open it and ask for a review.") },
         "agent-panel-permission": { AgentPanelSnapshot.make(showing: .permission) },
         "agent-panel-question": { AgentPanelSnapshot.make(showing: .question) },
+        "agent-panel-live": {
+            AgentPanelSnapshot.make(liveText: (AgentPanelSnapshot.liveConfirmed, AgentPanelSnapshot.liveVolatile))
+        },
+        "agent-panel-live-short": { AgentPanelSnapshot.make(liveText: ("", "Yes, open it")) },
+        "agent-panel-live-large-text": {
+            AgentPanelSnapshot.make(liveText: (AgentPanelSnapshot.liveConfirmed, AgentPanelSnapshot.liveVolatile),
+                                    textScale: TextScale.maximum)
+        },
     ]
 
     /// Levels staged in each of the bar's zones: green, orange, and red with the warning.
