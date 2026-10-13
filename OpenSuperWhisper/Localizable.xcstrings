@@ -17941,7 +17941,17 @@
         }
       }
     },
-    "Quiet": {
+    "Too quiet": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop faible"
+          }
+        }
+      }
+    },
+    "Low": {
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -17951,12 +17961,12 @@
         }
       }
     },
-    "Normal": {
+    "Good": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Normal"
+            "value": "Bon"
           }
         }
       }

@@ -74,6 +74,14 @@ enum STheme {
     static let danger    = dyn(dark: hex(0xF08A7A), light: hex(0xA94327))
     static let customText = dyn(dark: hex(0xD7A6E3), light: hex(0x7A3F8A))
     static let customBg  = dyn(dark: hex(0x46304D), light: hex(0xEFE0F3))
+
+    // MARK: Input level
+
+    /// The input level bar's zones, from too quiet to transcribe to good. Brighter than the
+    /// status colours: they are read as a fill on the bar, never as text.
+    static let levelQuiet = dyn(dark: hex(0xE8705F), light: hex(0xCF4A33))
+    static let levelLow   = dyn(dark: hex(0xF0A35E), light: hex(0xE08A2C))
+    static let levelGood  = dyn(dark: hex(0x6FC08F), light: hex(0x3E9663))
 }
 
 // MARK: - Layout

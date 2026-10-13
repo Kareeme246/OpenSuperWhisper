@@ -28,17 +28,19 @@ enum UISnapshotProbe {
             return AnyView(AppShellView(page: .home, settings: .models))
         },
         "help": { AppNavigation.shared.helpOpen = true; return AnyView(AppShellView(page: .home)) },
-        "mic-picker": { microphonePicker(verdict: .normal) },
-        "mic-picker-quiet": { microphonePicker(verdict: .tooQuiet) },
+        "mic-picker": { microphonePicker(.speaking) },
+        "mic-picker-low": { microphonePicker(.murmuring) },
+        "mic-picker-quiet": { microphonePicker(.tooQuiet) },
         "mic-picker-large-text": {
             AppPreferences.shared.textScale = TextScale.maximum
-            return microphonePicker(verdict: .tooQuiet)
+            return microphonePicker(.tooQuiet)
         },
-        "settings-dictation-level": { microphoneSettings(verdict: .normal) },
-        "settings-dictation-level-quiet": { microphoneSettings(verdict: .tooQuiet) },
+        "settings-dictation-level": { microphoneSettings(.speaking) },
+        "settings-dictation-level-low": { microphoneSettings(.murmuring) },
+        "settings-dictation-level-quiet": { microphoneSettings(.tooQuiet) },
         "settings-dictation-level-large-text": {
             AppPreferences.shared.textScale = TextScale.maximum
-            return microphoneSettings(verdict: .tooQuiet)
+            return microphoneSettings(.tooQuiet)
         },
         "onboarding": { AnyView(OnboardingView().environmentObject(AppState())) },
         "onboarding-2": { AnyView(OnboardingView(initialStep: .model).environmentObject(AppState())) },
@@ -68,10 +70,23 @@ enum UISnapshotProbe {
         "agent-panel-question": { AgentPanelSnapshot.make(showing: .question) },
     ]
 
+    /// Levels staged in each of the bar's zones: green, orange, and red with the warning.
+    private enum StagedLevel {
+        case speaking, murmuring, tooQuiet
+
+        var reading: InputLevelReading {
+            switch self {
+            case .speaking: return InputLevelReading(levelDBFS: -24, peakDBFS: -19, verdict: .normal)
+            case .murmuring: return InputLevelReading(levelDBFS: -44, peakDBFS: -39, verdict: .normal)
+            case .tooQuiet: return InputLevelReading(levelDBFS: -57, peakDBFS: -53, verdict: .tooQuiet)
+            }
+        }
+    }
+
     /// The Home microphone popover, drawn as a card over Home: an off-screen window cannot show a
     /// real popover. Levels are staged, so no microphone is opened.
-    private static func microphonePicker(verdict: QuietInput.Verdict) -> AnyView {
-        seedMicrophones(verdict: verdict)
+    private static func microphonePicker(_ level: StagedLevel) -> AnyView {
+        seedMicrophones(level)
         let card = MicrophonePickerList(microphoneService: MicrophoneService.shared)
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(STheme.cardBg))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(STheme.border, lineWidth: 1))
@@ -83,13 +98,13 @@ enum UISnapshotProbe {
         })
     }
 
-    private static func microphoneSettings(verdict: QuietInput.Verdict) -> AnyView {
-        seedMicrophones(verdict: verdict)
+    private static func microphoneSettings(_ level: StagedLevel) -> AnyView {
+        seedMicrophones(level)
         return scrolled(.dictation, to: "Microphone")
     }
 
     /// Two made-up microphones, set directly so nothing is saved to preferences.
-    private static func seedMicrophones(verdict: QuietInput.Verdict) {
+    private static func seedMicrophones(_ level: StagedLevel) {
         let builtIn = MicrophoneService.AudioDevice(id: "probe-built-in", name: "MacBook Pro Microphone",
                                                     manufacturer: "Apple Inc.", isBuiltIn: true)
         let usb = MicrophoneService.AudioDevice(id: "probe-usb", name: "Shure MV7",
@@ -98,9 +113,7 @@ enum UISnapshotProbe {
         service.availableMicrophones = [builtIn, usb]
         service.selectedMicrophone = builtIn
         service.currentMicrophone = builtIn
-        let speaking: [Float] = [0.42, 0.78, 0.9, 0.66, 0.5, 0.34, 0.2]
-        let murmur: [Float] = [0.08, 0.12, 0.1, 0.06, 0.05, 0.03, 0.02]
-        SpectrumAnalyzer.shared.stageBands(verdict == .tooQuiet ? murmur : speaking, verdict: verdict)
+        InputLevelMonitor.shared.stage(level.reading)
     }
 
     /// A rubric with Advanced on, scrolled to one of its rows, for the parts below the fold.
