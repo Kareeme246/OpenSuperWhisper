@@ -40,7 +40,8 @@ enum UISnapshotProbe {
         "settings-dictation-level-quiet": { microphoneSettings(.tooQuiet) },
         "settings-dictation-level-large-text": {
             AppPreferences.shared.textScale = TextScale.maximum
-            return microphoneSettings(.tooQuiet)
+            // Lower than the others: at this size the quiet band falls below the fold.
+            return microphoneSettings(.tooQuiet, scrolledTo: "Input volume")
         },
         "mic-picker-fixed-volume": { microphonePicker(.speaking, volume: .fixed) },
         "mic-picker-fixed-volume-quiet": { microphonePicker(.tooQuiet, volume: .fixed) },
@@ -107,9 +108,10 @@ enum UISnapshotProbe {
         })
     }
 
-    private static func microphoneSettings(_ level: StagedLevel, volume: StagedVolume = .settable) -> AnyView {
+    private static func microphoneSettings(_ level: StagedLevel, volume: StagedVolume = .settable,
+                                           scrolledTo row: String = "Microphone") -> AnyView {
         seedMicrophones(level, volume: volume)
-        return scrolled(.dictation, to: "Microphone")
+        return scrolled(.dictation, to: row)
     }
 
     /// Two made-up microphones, set directly so nothing is saved to preferences.
@@ -179,6 +181,8 @@ enum UISnapshotProbe {
             }
             for dark in [false, true] {
                 AppNavigation.shared.helpOpen = false
+                // A large-text screen would otherwise leave every later screen of the run large.
+                AppPreferences.shared.textScale = TextScale.default
                 let view = make()
                 let file = dir.appendingPathComponent("\(name)-\(dark ? "dark" : "light").png")
                 render(view, size: size, dark: dark, to: file)
