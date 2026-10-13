@@ -44,7 +44,8 @@ final class SenseVoiceEngine: TranscriptionEngine {
 
     /// Reads any audio file and returns 16 kHz mono float32 samples (SenseVoice's required input).
     /// A multi-channel file goes through the active-channel mix: AVAudioConverter's downmix
-    /// silences speech carried by one of several unlabeled channels.
+    /// silences speech carried by one of several unlabeled channels. A clip far too quiet comes
+    /// back lifted (`QuietClipGain`), whichever way it was read.
     private static func read16kMonoFloat(url: URL) async throws -> [Float] {
         let file = try AVAudioFile(forReading: url)
         if file.processingFormat.channelCount > 1 {
@@ -84,7 +85,7 @@ final class SenseVoiceEngine: TranscriptionEngine {
         if let convError { throw convError }
 
         guard let channel = dstBuffer.floatChannelData else { return [] }
-        return Array(UnsafeBufferPointer(start: channel[0], count: Int(dstBuffer.frameLength)))
+        return QuietClipGain.lifted(Array(UnsafeBufferPointer(start: channel[0], count: Int(dstBuffer.frameLength))))
     }
 }
 #endif
