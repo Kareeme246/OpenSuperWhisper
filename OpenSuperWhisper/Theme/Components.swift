@@ -485,12 +485,17 @@ struct SSlider: View {
     let range: ClosedRange<Double>
     var step: Double? = nil
     let valueLabel: String
+    /// Nil stretches the track across whatever width the slider is given.
+    var trackWidth: CGFloat? = 180
+    /// Names the slider for VoiceOver, which then reads `valueLabel` as its value instead of the
+    /// raw position, and skips the label beside it.
+    var accessibilityLabel: LocalizedStringKey? = nil
 
     var body: some View {
         HStack(spacing: 12) {
             // Stepped by rounding rather than through `Slider(step:)`, which on macOS draws a
             // tick under the track for every step.
-            Slider(value: Binding(
+            let slider = Slider(value: Binding(
                 get: { value },
                 set: { newValue in
                     guard let step, step > 0 else { value = newValue; return }
@@ -498,12 +503,21 @@ struct SSlider: View {
                     value = min(max(snapped, range.lowerBound), range.upperBound)
                 }), in: range)
             .tint(STheme.accent)
-            .frame(width: 180)
+            .frame(width: trackWidth)
+            .frame(maxWidth: trackWidth == nil ? .infinity : nil)
+            if let accessibilityLabel {
+                slider
+                    .accessibilityLabel(Text(accessibilityLabel))
+                    .accessibilityValue(Text(verbatim: valueLabel))
+            } else {
+                slider
+            }
             Text(valueLabel)
                 .scaledFont(size: 13, weight: .medium)
                 .monospacedDigit()
                 .foregroundColor(STheme.textSecondary)
                 .frame(minWidth: 52, alignment: .trailing)
+                .accessibilityHidden(accessibilityLabel != nil)
         }
     }
 }

@@ -31,6 +31,8 @@ struct DictationRubric: View {
               keywords: "confirmation escape twice confirmer annuler"),
         .init(title: "Microphone", rubric: .dictation,
               keywords: "mic input device headset micro entrée casque"),
+        .init(title: "Input volume", rubric: .dictation,
+              keywords: "microphone gain sensitivity quiet loud micro gain sensibilité faible fort"),
         .init(title: "Spoken language", rubric: .dictation,
               keywords: "language auto detect keyboard langue parlée clavier détection"),
         .init(title: "Translate to English", rubric: .dictation,
@@ -189,6 +191,7 @@ struct DictationRubric: View {
                     .labelsHidden()
                 }
             }
+            MicrophoneLevelRow(microphone: micService.currentMicrophone)
             SettingRow("Spoken language", hint: "Automatic follows the detected language or your keyboard.") {
                 SMenu(Text(verbatim: languageLabel)) {
                     Picker("", selection: $viewModel.selectedLanguage) {

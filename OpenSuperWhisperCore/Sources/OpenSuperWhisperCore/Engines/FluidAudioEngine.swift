@@ -88,19 +88,19 @@ class FluidAudioEngine: TranscriptionEngine {
         //    place FluidAudio 0.15.4 exposes decoder boosting. We feed the WAV through it
         //    rather than the mic (see `transcribeFileWithBoosting`).
         let boostTerms = activeBoostTerms()
-        let mixedSamples = try await Self.mixedSamplesIfMultiChannel(url: url)
+        let convertedSamples = try await Self.convertedSamplesIfNeeded(url: url)
         let rawText: String
         if boostTerms.isEmpty {
             // A fresh TDT decoder state per file keeps transcriptions independent.
             var decoderState = TdtDecoderState.make(decoderLayers: await asrManager.decoderLayerCount)
-            if let mixedSamples {
-                rawText = try await asrManager.transcribe(mixedSamples, decoderState: &decoderState).text
+            if let convertedSamples {
+                rawText = try await asrManager.transcribe(convertedSamples, decoderState: &decoderState).text
             } else {
                 rawText = try await asrManager.transcribe(url, decoderState: &decoderState).text
             }
         } else {
             rawText = try await transcribeFileWithBoosting(
-                url: url, mixedSamples: mixedSamples, boostTerms: boostTerms)
+                url: url, convertedSamples: convertedSamples, boostTerms: boostTerms)
         }
 
         guard !isCancelled else {
@@ -149,7 +149,7 @@ class FluidAudioEngine: TranscriptionEngine {
     /// The audio comes entirely from `streamAudio(_:)` (the WAV read into one buffer, then sliced),
     /// never a microphone — `startStreaming(source:)` only records the source as metadata and opens
     /// no input device. `finish()` returns the merged transcript.
-    private func transcribeFileWithBoosting(url: URL, mixedSamples: [Float]?,
+    private func transcribeFileWithBoosting(url: URL, convertedSamples: [Float]?,
                                             boostTerms: [String]) async throws -> String {
         let versionString = CoreAccess.preferences.fluidAudioModelVersion
         let version = AsrModelVersion(preference: versionString)
@@ -160,7 +160,7 @@ class FluidAudioEngine: TranscriptionEngine {
         try await manager.loadModels(models)
         try await manager.startStreaming(source: .system)
 
-        guard let buffer = try mixedSamples.map(Self.monoBuffer) ?? Self.readWholeFile(url) else {
+        guard let buffer = try convertedSamples.map(Self.monoBuffer) ?? Self.readWholeFile(url) else {
             await manager.cancel()
             return ""
         }
@@ -192,12 +192,15 @@ class FluidAudioEngine: TranscriptionEngine {
         return try await manager.finish()
     }
 
-    /// The recorder writes every input channel of the device. FluidAudio downmixes such a file
-    /// with AVAudioConverter, which turns speech carried by one of several unlabeled channels
-    /// into silence, so a multi-channel file goes through the active-channel mix instead.
-    /// Mono files keep FluidAudio's own reader.
-    private static func mixedSamplesIfMultiChannel(url: URL) async throws -> [Float]? {
-        guard try AVAudioFile(forReading: url).processingFormat.channelCount > 1 else { return nil }
+    /// Samples to hand FluidAudio in place of the file, or nil to let it read the file itself.
+    /// The recorder writes every input channel of an external device. FluidAudio downmixes such
+    /// a file with AVAudioConverter, which turns speech carried by one of several unlabeled
+    /// channels into silence, so a multi-channel file goes through the active-channel mix
+    /// instead. A mono file goes through it too when it is quiet enough to be lifted
+    /// (`QuietClipGain`); any other keeps FluidAudio's reader, which streams long files from disk.
+    private static func convertedSamplesIfNeeded(url: URL) async throws -> [Float]? {
+        let isMultiChannel = try AVAudioFile(forReading: url).processingFormat.channelCount > 1
+        guard try isMultiChannel || AudioPCMConverter.staysBelowNormalLevel(url) else { return nil }
         guard let samples = try await AudioPCMConverter.convertAudioToPCM(fileURL: url) else {
             throw TranscriptionError.audioConversionFailed
         }

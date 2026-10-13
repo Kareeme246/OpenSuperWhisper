@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import CoreAudioTypes
+import Accelerate
 
 /// Reads any audio file into 16 kHz mono float samples, the input every local engine wants.
 ///
@@ -8,6 +9,8 @@ import CoreAudioTypes
 /// AVAudioConverter downmix instead goes wrong on interfaces that expose several unlabeled
 /// inputs with speech on one (an Audient EVO 4 records 2 mics + 2 loopback): the result is
 /// silence, and the engine reports "No speech detected".
+///
+/// A clip recorded far too quiet comes out lifted by `QuietClipGain`; the file is not touched.
 enum AudioPCMConverter {
     private static func resolveFileURL(_ fileURL: URL) throws -> (URL, Bool) {
         let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
@@ -58,7 +61,7 @@ enum AudioPCMConverter {
                     targetFormat: targetFormat,
                     ratio: ratio,
                     totalFrames: totalFrames
-                )
+                ).map(QuietClipGain.lifted)
             }
             
             // Parallel processing: split file into segments
@@ -170,7 +173,7 @@ enum AudioPCMConverter {
                 result.removeLast(result.count - totalWritten)
             }
             
-            return result.isEmpty ? nil : result
+            return result.isEmpty ? nil : QuietClipGain.lifted(result)
         }.value
     }
     
@@ -291,6 +294,25 @@ enum AudioPCMConverter {
             interleaved: false,
             channelLayout: channelLayout
         )
+    }
+
+    /// Whether no sample of the file reaches a normal level, so that `convertAudioToPCM` may
+    /// lift it. Read in chunks and stopped at the first loud sample, so a normal file costs a
+    /// moment of decoding rather than a second copy of the clip in memory.
+    static func staysBelowNormalLevel(_ fileURL: URL) throws -> Bool {
+        let file = try AVAudioFile(forReading: fileURL)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 65536) else {
+            return false
+        }
+        while file.framePosition < file.length {
+            try file.read(into: buffer)
+            guard buffer.frameLength > 0, let channels = buffer.floatChannelData else { break }
+            for channel in 0..<Int(buffer.format.channelCount) {
+                let samples = UnsafeBufferPointer(start: channels[channel], count: Int(buffer.frameLength))
+                if vDSP.maximumMagnitude(samples) >= QuietClipGain.quietPeakAmplitude { return false }
+            }
+        }
+        return true
     }
 
     /// For engines that only take a file: a temporary 16 kHz mono WAV holding the
