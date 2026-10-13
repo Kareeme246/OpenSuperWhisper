@@ -17910,6 +17910,56 @@
           }
         }
       }
+    },
+    "Input level": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niveau d'entrée"
+          }
+        }
+      }
+    },
+    "Speak to test your microphone.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parlez pour tester votre micro."
+          }
+        }
+      }
+    },
+    "Very quiet. Move closer or pick another microphone.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Très faible. Rapprochez-vous ou choisissez un autre micro."
+          }
+        }
+      }
+    },
+    "Quiet": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faible"
+          }
+        }
+      }
+    },
+    "Normal": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

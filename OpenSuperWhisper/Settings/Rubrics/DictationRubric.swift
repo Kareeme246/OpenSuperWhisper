@@ -189,6 +189,7 @@ struct DictationRubric: View {
                     .labelsHidden()
                 }
             }
+            MicrophoneLevelRow(microphone: micService.currentMicrophone)
             SettingRow("Spoken language", hint: "Automatic follows the detected language or your keyboard.") {
                 SMenu(Text(verbatim: languageLabel)) {
                     Picker("", selection: $viewModel.selectedLanguage) {
