@@ -51,8 +51,9 @@ struct InputLevelBar: View {
             let peak = CGFloat(InputLevel.fraction(dBFS: reading.peakDBFS))
             ZStack(alignment: .leading) {
                 Capsule().fill(STheme.fill)
+                    .frame(height: height)
                 LinearGradient(gradient: Self.gradient, startPoint: .leading, endPoint: .trailing)
-                    .frame(width: width)
+                    .frame(width: width, height: height)
                     .frame(width: width * fill, alignment: .leading)
                     .clipShape(Capsule())
                 if peak > 0 {

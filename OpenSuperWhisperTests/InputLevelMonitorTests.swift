@@ -50,6 +50,21 @@ final class InputLevelMonitorTests: XCTestCase {
         XCTAssertFalse(monitor.isRunning)
     }
 
+    func testACaptureThatDeliversNothingEndsUpTooQuiet() async throws {
+        _ = monitor.begin(deviceUID: "built-in")
+        XCTAssertEqual(monitor.reading.verdict, .listening)
+        try await Task.sleep(for: .seconds(QuietInput.listeningWindow + 0.5))
+        XCTAssertEqual(monitor.reading.verdict, .tooQuiet)
+    }
+
+    func testACaptureThatDeliversKeepsItsOwnVerdict() async throws {
+        _ = monitor.begin(deviceUID: "built-in")
+        source.onReading?(InputLevelReading(levelDBFS: -30, peakDBFS: -25, verdict: .normal))
+        await settle()
+        try await Task.sleep(for: .seconds(QuietInput.listeningWindow + 0.5))
+        XCTAssertEqual(monitor.reading.verdict, .normal)
+    }
+
     func testEndingTheSameTokenTwiceDoesNotReleaseAnotherView() {
         let popover = monitor.begin(deviceUID: nil)
         _ = monitor.begin(deviceUID: nil)

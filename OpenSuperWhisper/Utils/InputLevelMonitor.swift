@@ -77,6 +77,7 @@ final class InputLevelMonitor: ObservableObject {
     /// Bumped on every stop, so readings still in flight from a closed capture are dropped
     /// instead of repainting a bar that was just cleared.
     private var generation = 0
+    private var heardFromSource = false
 
     #if DEBUG
     /// Set once something has been staged: the probes draw staged levels and must never open the
@@ -121,13 +122,28 @@ final class InputLevelMonitor: ObservableObject {
         stop()
         guard canOpen else { return }
         let generation = self.generation
+        heardFromSource = false
         source.start(deviceUID: deviceUID) { [weak self] reading in
             Task { @MainActor in
                 guard let self, self.generation == generation else { return }
+                self.heardFromSource = true
                 self.reading = reading
             }
         }
         isRunning = true
+        warnIfNothingArrives(generation: generation)
+    }
+
+    /// A capture that opens but never delivers a buffer it can read leaves the bar empty and the
+    /// verdict listening forever; past the listening window, that is a microphone that hears
+    /// nothing, and the user is told so.
+    private func warnIfNothingArrives(generation: Int) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(QuietInput.listeningWindow))
+            guard let self, self.generation == generation, self.isRunning, !self.heardFromSource else { return }
+            Diag.mark("input level: no readable audio after \(QuietInput.listeningWindow)s")
+            self.reading.verdict = .tooQuiet
+        }
     }
 
     private func stop() {
