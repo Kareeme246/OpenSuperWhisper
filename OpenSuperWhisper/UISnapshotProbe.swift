@@ -42,6 +42,9 @@ enum UISnapshotProbe {
             AppPreferences.shared.textScale = TextScale.maximum
             return microphoneSettings(.tooQuiet)
         },
+        "mic-picker-fixed-volume": { microphonePicker(.speaking, volume: .fixed) },
+        "mic-picker-fixed-volume-quiet": { microphonePicker(.tooQuiet, volume: .fixed) },
+        "settings-dictation-fixed-volume": { microphoneSettings(.tooQuiet, volume: .fixed) },
         "onboarding": { AnyView(OnboardingView().environmentObject(AppState())) },
         "onboarding-2": { AnyView(OnboardingView(initialStep: .model).environmentObject(AppState())) },
         "onboarding-3": { AnyView(OnboardingView(initialStep: .permissions).environmentObject(AppState())) },
@@ -83,10 +86,16 @@ enum UISnapshotProbe {
         }
     }
 
+    /// The built-in microphone's own volume as found on the Mac that prompted the slider, or one
+    /// macOS keeps to itself, as on many USB microphones.
+    private enum StagedVolume {
+        case settable, fixed
+    }
+
     /// The Home microphone popover, drawn as a card over Home: an off-screen window cannot show a
-    /// real popover. Levels are staged, so no microphone is opened.
-    private static func microphonePicker(_ level: StagedLevel) -> AnyView {
-        seedMicrophones(level)
+    /// real popover. Levels and volumes are staged, so no microphone is opened or changed.
+    private static func microphonePicker(_ level: StagedLevel, volume: StagedVolume = .settable) -> AnyView {
+        seedMicrophones(level, volume: volume)
         let card = MicrophonePickerList(microphoneService: MicrophoneService.shared)
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(STheme.cardBg))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(STheme.border, lineWidth: 1))
@@ -98,13 +107,13 @@ enum UISnapshotProbe {
         })
     }
 
-    private static func microphoneSettings(_ level: StagedLevel) -> AnyView {
-        seedMicrophones(level)
+    private static func microphoneSettings(_ level: StagedLevel, volume: StagedVolume = .settable) -> AnyView {
+        seedMicrophones(level, volume: volume)
         return scrolled(.dictation, to: "Microphone")
     }
 
     /// Two made-up microphones, set directly so nothing is saved to preferences.
-    private static func seedMicrophones(_ level: StagedLevel) {
+    private static func seedMicrophones(_ level: StagedLevel, volume: StagedVolume) {
         let builtIn = MicrophoneService.AudioDevice(id: "probe-built-in", name: "MacBook Pro Microphone",
                                                     manufacturer: "Apple Inc.", isBuiltIn: true)
         let usb = MicrophoneService.AudioDevice(id: "probe-usb", name: "Shure MV7",
@@ -114,6 +123,10 @@ enum UISnapshotProbe {
         service.selectedMicrophone = builtIn
         service.currentMicrophone = builtIn
         InputLevelMonitor.shared.stage(level.reading)
+        switch volume {
+        case .settable: InputVolumeModel.shared.stage(volume: 0.38, isSettable: true)
+        case .fixed: InputVolumeModel.shared.stage(volume: nil, isSettable: false)
+        }
     }
 
     /// A rubric with Advanced on, scrolled to one of its rows, for the parts below the fold.
