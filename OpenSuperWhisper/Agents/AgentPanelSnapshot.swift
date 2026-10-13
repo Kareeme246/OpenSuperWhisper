@@ -54,7 +54,7 @@ enum AgentPanelSnapshot {
     /// Three lines' worth at the default size, so the first one has scrolled away.
     static let liveConfirmed = "Yes, open the PR, but before that rename the setting to restore delay "
         + "and add a line about it in the release notes so people know where to find it"
-    static let liveVolatile = "and then ask Beverley"
+    static let liveVolatile = "and then ask for a review"
 
     private static let stopMessage = """
         Done. The previous clipboard now comes back after **0.5 s** instead of 1 s, and the delay is a setting.
