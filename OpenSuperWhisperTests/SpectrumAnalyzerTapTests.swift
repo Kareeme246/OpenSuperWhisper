@@ -58,7 +58,8 @@ final class SpectrumAnalyzerTapTests: XCTestCase {
         let engine = AVAudioEngine()
         let devices = SpectrumAnalyzer.devicesBehindInput(of: engine)
 
+        let unitDevice = engine.inputNode.auAudioUnit.deviceID
         XCTAssertTrue(devices.contains(defaultInput),
-                      "input on \(devices) (unit device \(engine.inputNode.auAudioUnit.deviceID)), default \(defaultInput)")
+                      "input on \(devices) (unit device \(unitDevice)), default \(defaultInput)")
     }
 }

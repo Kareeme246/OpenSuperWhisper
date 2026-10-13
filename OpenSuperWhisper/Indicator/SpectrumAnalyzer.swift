@@ -26,20 +26,24 @@ final class SpectrumAnalyzer: ObservableObject {
     /// On macOS the engine's input and output nodes share one HAL I/O unit, and that unit takes
     /// the default input when it is created, the first time `inputNode` is read: the device
     /// itself, or a private aggregate of it and the default output when those differ (see
-    /// `devicesBehindInput`). Nothing in AVFAudio promises it follows the default afterwards,
-    /// and the bug fits one that does not. `AudioRecorder` makes the chosen mic the default just
-    /// before each take, so the one engine kept for the app's lifetime went on tapping whichever
-    /// mic the first take used: after a switch from the USB mic to the built-in one, the file
-    /// recorded the built-in mic at a normal level while the bubble stayed flat. A coreaudiod restart leaves the same kind of
-    /// engine on a device that no longer exists at all. `spectrum.input` in the diagnostic log
-    /// names the devices the tap is on next to the default, so a report shows whether they match.
+    /// `devicesBehindInput`). Nothing in AVFAudio promises it follows the default afterwards.
+    /// `AudioRecorder` makes the chosen mic the default just before each take, and with one
+    /// engine kept for the app's lifetime, a switch from the USB mic to the built-in one gave a
+    /// file with the built-in mic at a normal level and a flat bubble. A unit stuck on the first
+    /// take's mic fits that, but it is not proven: the default-device aggregate may already be
+    /// rebuilt when the defaults change, in which case the cause is the aggregate or its channel
+    /// layout. `spectrum.input` in the diagnostic log names the devices the tap is on next to
+    /// the default, so a report of a flat bubble settles which. A coreaudiod restart would leave
+    /// a kept engine on a device that no longer exists at all.
     ///
     /// A new engine reads the default the recorder has just set, the same rule
     /// `AVAudioRecorder` follows, so both open the same device without passing it around.
     /// Pointing a kept engine at the recorder's device instead
     /// (`kAudioOutputUnitProperty_CurrentDevice` on its unit) also works on paper, but switching
     /// a unit's device has been reported to leave the input node on a 0 Hz / 0 channel format,
-    /// the same kind of stale format #107 was about. An engine is cheap next to a take.
+    /// the same kind of stale format #107 was about. Building and releasing the unit (and its
+    /// aggregate) on the main actor is timed as `spectrum.engine` and `spectrum.release`; if
+    /// either is slow, keep the engine across takes while it still sits on the default input.
     private var engine: AVAudioEngine?
     private var configurationObserver: NSObjectProtocol?
     private var isRunning = false
@@ -77,7 +81,13 @@ final class SpectrumAnalyzer: ObservableObject {
         guard Self.shouldRun(layout: IndicatorLayout.load(from: AppPreferences.shared.indicatorLayout))
         else { return }
 
-        let engine = AVAudioEngine()
+        // Reading `inputNode` is what creates the I/O unit, and with it any default-device
+        // aggregate, so it is inside the measurement: that is the part that can block.
+        let engine = Diag.measure("spectrum.engine") { () -> AVAudioEngine in
+            let engine = AVAudioEngine()
+            _ = engine.inputNode
+            return engine
+        }
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         Diag.mark("spectrum.input=\(Self.devicesBehindInput(of: engine)) "
@@ -170,14 +180,18 @@ final class SpectrumAnalyzer: ObservableObject {
     }
 
     func stop() {
-        guard isRunning, let engine else { return }
+        guard isRunning, engine != nil else { return }
         if let configurationObserver {
             NotificationCenter.default.removeObserver(configurationObserver)
         }
         configurationObserver = nil
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
-        self.engine = nil
+        // Through the property rather than a local binding, so the last reference goes inside the
+        // measurement and the unit's teardown is counted in it.
+        Diag.measure("spectrum.release") {
+            engine?.inputNode.removeTap(onBus: 0)
+            engine?.stop()
+            engine = nil
+        }
         isRunning = false
         sampleBuffer.removeAll(keepingCapacity: true)
         cachedRanges = nil
