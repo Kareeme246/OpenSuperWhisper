@@ -28,8 +28,13 @@ enum UISnapshotProbe {
             return AnyView(AppShellView(page: .home, settings: .models))
         },
         "help": { AppNavigation.shared.helpOpen = true; return AnyView(AppShellView(page: .home)) },
-        "feedback": { feedbackMenuOpen() },
-        "feedback-large-text": { AppPreferences.shared.textScale = TextScale.maximum; return feedbackMenuOpen() },
+        "feedback-form": { feedbackCard() },
+        "feedback-form-bug": { feedbackCard(stagedBug: true) },
+        "feedback-form-bug-large-text": {
+            AppPreferences.shared.textScale = TextScale.maximum
+            return feedbackCard(stagedBug: true)
+        },
+        "feedback-sent": { feedbackCard(status: .sent) },
         "onboarding": { AnyView(OnboardingView().environmentObject(AppState())) },
         "onboarding-2": { AnyView(OnboardingView(initialStep: .model).environmentObject(AppState())) },
         "onboarding-3": { AnyView(OnboardingView(initialStep: .permissions).environmentObject(AppState())) },
@@ -66,14 +71,19 @@ enum UISnapshotProbe {
         return view
     }
 
-    /// Home with the sidebar's Feedback menu open. A popover is a window of its own, which an
-    /// off-screen render never draws, so the menu is drawn where it would open: beside the row.
-    private static func feedbackMenuOpen() -> AnyView {
-        AnyView(AppShellView(page: .home)
-            .overlay(alignment: .bottomLeading) {
-                FeedbackMenuBesideSidebar()
-                    .environment(\.appTextScale, AppPreferences.shared.textScale)
-            })
+    /// Home with the Feedback card open on a staged draft. Its sender fails without a request
+    /// ever being made: the endpoint notifies the owner, and a snapshot is never meant to.
+    private static func feedbackCard(stagedBug: Bool = false,
+                                     status: FeedbackFormModel.Status = .editing) -> AnyView {
+        let model = FeedbackFormModel(sender: FeedbackSender(transport: { _ in throw URLError(.cancelled) }))
+        if stagedBug {
+            model.kind = .bug
+            model.message = "The bubble stays on screen after I stop dictating in Mail. It goes away once I click elsewhere."
+            model.email = "camille@example.com"
+        }
+        model.stageStatus(status)
+        AppNavigation.shared.feedbackOpen = true
+        return AnyView(AppShellView(page: .home, feedback: model))
     }
 
     static func run(outputDir: String, names: [String]) -> Never {
@@ -118,6 +128,7 @@ enum UISnapshotProbe {
             }
             for dark in [false, true] {
                 AppNavigation.shared.helpOpen = false
+                AppNavigation.shared.feedbackOpen = false
                 let view = make()
                 let file = dir.appendingPathComponent("\(name)-\(dark ? "dark" : "light").png")
                 render(view, size: size, dark: dark, to: file)
@@ -160,20 +171,6 @@ enum UISnapshotProbe {
         host.cacheDisplay(in: host.bounds, to: rep)
         try? rep.representation(using: .png, properties: [:])?.write(to: url)
         window.close()
-    }
-
-    /// The Feedback menu in a popover's place, with the card edge a popover gives it.
-    private struct FeedbackMenuBesideSidebar: View {
-        @Environment(\.textScaleFactor) private var textScale
-
-        var body: some View {
-            FeedbackMenu()
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(STheme.border, lineWidth: 1))
-                .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
-                .padding(.leading, AppSidebar.width(textScale: textScale) + 10)
-                .padding(.bottom, 12)
-        }
     }
 
     /// A few made-up dictations so Home has something to show.
