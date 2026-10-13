@@ -24,7 +24,7 @@ struct AppSidebar: View {
                 .padding(.bottom, 8)
             StatusCard(permissions: permissions)
                 .padding(.bottom, 10)
-            footerRow(title: "Feedback", symbol: "bubble.left.and.text.bubble.right", shortcut: nil) {
+            footerRow(title: "Feedback", symbol: "heart.text.square", shortcut: nil) {
                 feedbackOpen.toggle()
             }
             .help("Report a bug, send an idea, or try a beta build")

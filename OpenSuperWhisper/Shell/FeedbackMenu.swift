@@ -26,8 +26,8 @@ struct FeedbackMenu: View {
             }
         }
         .padding(8)
-        // Wider with the text, as the sidebar is, so the subtitles keep to two lines.
-        .frame(width: 320 * min(max(textScale, 1), 1.45))
+        // Wider with the text, as the sidebar is, so the subtitles don't wrap any further.
+        .frame(width: 360 * min(max(textScale, 1), 1.45))
         .background(STheme.cardBg)
         .onExitCommand(perform: onPick)
     }
