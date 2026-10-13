@@ -119,9 +119,16 @@ enum AgentHookCommand {
         return trimmed?.isEmpty == false ? trimmed : nil
     }
 
+    static let questionTool = "AskUserQuestion"
+
+    /// Claude Code asks for a permission on AskUserQuestion too, after the PreToolUse hook has
+    /// had its turn and printed nothing (the pane's wait ran out, the user sent it back to the
+    /// terminal, or questions are switched off). As a permission it would show the questions as
+    /// raw JSON, and an "allow" without answers makes Claude Code refuse the question outright.
+    /// The question card already had its chance, so this one is left to the terminal.
     static func makePermissionRequest(from json: [String: Any], now: Date = Date(),
                                       pid: Int32 = getpid()) -> AgentRequest? {
-        guard let tool = json["tool_name"] as? String else { return nil }
+        guard let tool = json["tool_name"] as? String, tool != questionTool else { return nil }
         let input = (json["tool_input"] as? [String: Any]) ?? [:]
         var request = baseRequest(kind: .permission, json: json,
                                   message: (input["description"] as? String) ?? "", now: now, pid: pid)
