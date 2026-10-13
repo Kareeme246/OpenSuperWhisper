@@ -1,3 +1,5 @@
+import AVFoundation
+import CoreAudio
 import XCTest
 
 @testable import OpenSuperWhisper
@@ -42,5 +44,22 @@ final class SpectrumAnalyzerTapTests: XCTestCase {
     /// The default layout does show the meter, so nobody loses the visualiser to this.
     func testTheDefaultLayoutStillGetsItsMeter() {
         XCTAssertTrue(SpectrumAnalyzer.shouldRun(layout: .default))
+    }
+
+    /// What building one engine per take relies on: a new engine reads from the device that is
+    /// the default input at that moment, which `AudioRecorder` has just made the take's mic. The
+    /// engine is never started, so no microphone is opened; reading `inputNode` only creates the
+    /// I/O unit.
+    func testAFreshEngineReadsTheCurrentDefaultInput() throws {
+        guard let defaultInput = MicrophoneService.shared.getCurrentSystemDefaultInputDevice(),
+              defaultInput != kAudioObjectUnknown
+        else { throw XCTSkip("no input device on this machine") }
+
+        let engine = AVAudioEngine()
+        let devices = SpectrumAnalyzer.devicesBehindInput(of: engine)
+
+        let unitDevice = engine.inputNode.auAudioUnit.deviceID
+        XCTAssertTrue(devices.contains(defaultInput),
+                      "input on \(devices) (unit device \(unitDevice)), default \(defaultInput)")
     }
 }
