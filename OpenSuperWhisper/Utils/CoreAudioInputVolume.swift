@@ -61,14 +61,28 @@ final class CoreAudioInputVolume: InputVolumeBackend {
         return status == noErr
     }
 
+    @MainActor
     func observeVolume(_ device: AudioObjectID, element: AudioObjectPropertyElement,
                        onChange: @escaping @MainActor () -> Void) -> InputVolumeObservation {
-        // Delivered on the main queue, so the block is already on the main actor.
-        let block: AudioObjectPropertyListenerBlock = { _, _ in MainActor.assumeIsolated { onChange() } }
-        var address = Self.volumeAddress(element)
-        let status = AudioObjectAddPropertyListenerBlock(device, &address, .main, block)
-        if status != noErr { Diag.mark("input volume: can't watch element \(element) (\(status))") }
-        return Listener(device: device, address: address, block: block, isRegistered: status == noErr)
+        Listener(device, Self.volumeAddress(element), onChange: onChange)
+    }
+
+    @MainActor
+    func observeTopology(of device: AudioObjectID?,
+                         onChange: @escaping @MainActor () -> Void) -> [InputVolumeObservation] {
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        var listeners = [
+            Listener(system, Self.address(kAudioHardwarePropertyDevices, scope: kAudioObjectPropertyScopeGlobal),
+                     onChange: onChange),
+            Listener(system, Self.address(kAudioHardwarePropertyDefaultInputDevice, scope: kAudioObjectPropertyScopeGlobal),
+                     onChange: onChange),
+        ]
+        // The built-in microphone switching source keeps its ID but may change its volume elements.
+        var dataSource = Self.address(kAudioDevicePropertyDataSource, scope: kAudioDevicePropertyScopeInput)
+        if let device, AudioObjectHasProperty(device, &dataSource) {
+            listeners.append(Listener(device, dataSource, onChange: onChange))
+        }
+        return listeners
     }
 
     private static func volumeAddress(_ element: AudioObjectPropertyElement) -> AudioObjectPropertyAddress {
@@ -77,25 +91,61 @@ final class CoreAudioInputVolume: InputVolumeBackend {
                                    mElement: element)
     }
 
-    /// Removal needs the very block and queue that were registered.
+    private static func address(_ selector: AudioObjectPropertySelector,
+                                scope: AudioObjectPropertyScope) -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+    }
+
+    /// One HAL listener, removed on cancel.
+    ///
+    /// Registered through the function-pointer API, not `AudioObjectAddPropertyListenerBlock`:
+    /// Swift wraps a listener block in a new Objective-C block each time it is passed to C, so
+    /// the remove call never matches the block that was added. It still returns noErr, and the
+    /// listener keeps firing for the rest of the process.
+    ///
+    /// The HAL is handed a number rather than a pointer to the listener, and the callback is
+    /// looked up by that number on the main actor, so a notification that races the removal
+    /// finds nothing instead of a freed object.
+    @MainActor
     private final class Listener: InputVolumeObservation {
-        private let device: AudioObjectID
+        private static var callbacks: [UInt: @MainActor () -> Void] = [:]
+        private static var lastID: UInt = 0
+
+        private static let proc: AudioObjectPropertyListenerProc = { _, _, _, context in
+            let id = UInt(bitPattern: context)
+            // Called on a HAL thread.
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { Listener.callbacks[id]?() }
+            }
+            return noErr
+        }
+
+        private let object: AudioObjectID
         private var address: AudioObjectPropertyAddress
-        private let block: AudioObjectPropertyListenerBlock
+        private let id: UInt
         private var isRegistered: Bool
 
-        init(device: AudioObjectID, address: AudioObjectPropertyAddress,
-             block: @escaping AudioObjectPropertyListenerBlock, isRegistered: Bool) {
-            self.device = device
+        init(_ object: AudioObjectID, _ address: AudioObjectPropertyAddress, onChange: @escaping @MainActor () -> Void) {
+            Self.lastID &+= 1
+            self.object = object
             self.address = address
-            self.block = block
-            self.isRegistered = isRegistered
+            self.id = Self.lastID
+            Self.callbacks[id] = onChange
+            let status = AudioObjectAddPropertyListener(object, &self.address, Self.proc, Self.context(id))
+            if status != noErr { Diag.mark("input volume: can't watch '\(address.mSelector)' on \(object) (\(status))") }
+            isRegistered = status == noErr
+            if !isRegistered { Self.callbacks[id] = nil }
         }
 
         func cancel() {
             guard isRegistered else { return }
             isRegistered = false
-            AudioObjectRemovePropertyListenerBlock(device, &address, .main, block)
+            Self.callbacks[id] = nil
+            AudioObjectRemovePropertyListener(object, &address, Self.proc, Self.context(id))
+        }
+
+        private static func context(_ id: UInt) -> UnsafeMutableRawPointer? {
+            UnsafeMutableRawPointer(bitPattern: id)
         }
     }
 }

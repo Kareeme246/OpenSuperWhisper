@@ -36,12 +36,29 @@ final class InputVolumeModelTests: XCTestCase {
             }
         }
 
+        final class TopologyObservation: InputVolumeObservation {
+            let device: AudioObjectID?
+            let onChange: @MainActor () -> Void
+            weak var backend: FakeBackend?
+
+            init(device: AudioObjectID?, onChange: @escaping @MainActor () -> Void, backend: FakeBackend) {
+                self.device = device
+                self.onChange = onChange
+                self.backend = backend
+            }
+
+            func cancel() {
+                backend?.topologyObservations.removeAll { $0 === self }
+            }
+        }
+
         var uids: [String: AudioObjectID] = [:]
         var systemInput: AudioObjectID?
         var channelCounts: [AudioObjectID: Int] = [:]
         var controls: [AudioObjectID: [AudioObjectPropertyElement: Control]] = [:]
         private(set) var writes: [(device: AudioObjectID, element: AudioObjectPropertyElement, scalar: Float)] = []
         fileprivate(set) var observations: [Observation] = []
+        fileprivate(set) var topologyObservations: [TopologyObservation] = []
         private(set) var lookups = 0
 
         var watched: [AudioObjectID: [AudioObjectPropertyElement]] {
@@ -82,6 +99,21 @@ final class InputVolumeModelTests: XCTestCase {
             return observation
         }
 
+        func observeTopology(of device: AudioObjectID?,
+                             onChange: @escaping @MainActor () -> Void) -> [InputVolumeObservation] {
+            let observation = TopologyObservation(device: device, onChange: onChange, backend: self)
+            topologyObservations.append(observation)
+            return [observation]
+        }
+
+        /// A device coming or going, or the built-in microphone switching source.
+        @MainActor
+        func changeTopology() {
+            for observation in topologyObservations {
+                observation.onChange()
+            }
+        }
+
         /// Sound settings, or another app, moving the volume.
         @MainActor
         func changeElsewhere(_ device: AudioObjectID, element: AudioObjectPropertyElement, to scalar: Float) {
@@ -115,8 +147,13 @@ final class InputVolumeModelTests: XCTestCase {
         model = InputVolumeModel(backend: backend, writeInterval: .milliseconds(20))
     }
 
-    private func waitForWrites() async throws {
-        try await Task.sleep(for: .milliseconds(120))
+    /// Until the last write's interval is over, polled so a slow host only waits longer.
+    private func waitForWrites(timeout: Duration = .seconds(5)) async throws {
+        let deadline = ContinuousClock.now + timeout
+        while model.isWriting {
+            guard ContinuousClock.now < deadline else { return XCTFail("still writing after \(timeout)") }
+            try await Task.sleep(for: .milliseconds(5))
+        }
     }
 
     // MARK: - Which control
@@ -147,6 +184,18 @@ final class InputVolumeModelTests: XCTestCase {
         XCTAssertEqual(backend.writes.map(\.element), [1, 2])
         XCTAssertTrue(backend.writes.allSatisfy { $0.device == Self.builtIn && $0.scalar == 0.8 })
         XCTAssertEqual(model.volume, 0.8)
+    }
+
+    func testAChannelThatCannotBeWrittenDoesNotHoldTheSliderDown() async throws {
+        backend.controls[Self.builtIn]?[3] = .init(volume: 0.5, settable: false)
+        _ = model.begin(deviceUID: "built-in")
+        XCTAssertEqual(backend.watched[Self.builtIn], [1, 2], "read and watched as written")
+
+        model.setToMaximum()
+        try await waitForWrites()
+        XCTAssertEqual(model.volume, 1, "the thumb stays where it was put")
+        XCTAssertEqual(QuietInputRemedy(verdict: .tooQuiet, volume: model.volume, isSettable: model.isSettable),
+                       .none, "and the warning stops offering what is already done")
     }
 
     func testAMicrophoneWithoutAVolumeOffersNothingToMove() {
@@ -196,6 +245,36 @@ final class InputVolumeModelTests: XCTestCase {
         XCTAssertEqual(model.volume, 0.7, "the microphone left behind no longer moves the slider")
     }
 
+    func testAMicrophoneThatComesBackAsAnotherObjectIsFollowed() {
+        _ = model.begin(deviceUID: "built-in")
+        XCTAssertEqual(backend.topologyObservations.map(\.device), [Self.builtIn])
+
+        // coreaudiod restarted: same UID, new object, and a volume of its own.
+        let reborn: AudioObjectID = 93
+        backend.uids["built-in"] = reborn
+        backend.channelCounts[reborn] = 1
+        backend.controls[reborn] = [Self.main: .init(volume: 0.6, settable: true)]
+        backend.changeTopology()
+
+        XCTAssertEqual(backend.watched, [reborn: [Self.main]])
+        XCTAssertEqual(backend.topologyObservations.map(\.device), [reborn])
+        XCTAssertEqual(model.volume, 0.6)
+    }
+
+    func testAMicrophonePluggedInLaterBringsTheSliderIn() {
+        backend.uids["usb"] = nil
+        backend.systemInput = nil
+        _ = model.begin(deviceUID: "usb")
+        XCTAssertNil(model.volume)
+        XCTAssertEqual(backend.topologyObservations.map(\.device), [nil], "watched even with nothing to show")
+
+        backend.uids["usb"] = Self.usb
+        backend.controls[Self.usb] = [Self.main: .init(volume: 0.4, settable: true)]
+        backend.changeTopology()
+        XCTAssertEqual(model.volume, 0.4)
+        XCTAssertTrue(model.isSettable)
+    }
+
     func testTheLastViewToGoRemovesTheListeners() {
         let popover = model.begin(deviceUID: "built-in")
         let settings = model.begin(deviceUID: "built-in")
@@ -206,6 +285,7 @@ final class InputVolumeModelTests: XCTestCase {
         model.end(settings)
         XCTAssertFalse(model.isObserving)
         XCTAssertTrue(backend.observations.isEmpty)
+        XCTAssertTrue(backend.topologyObservations.isEmpty)
     }
 
     func testAReleasedTokenCannotSwitchTheMicrophone() {
@@ -246,15 +326,38 @@ final class InputVolumeModelTests: XCTestCase {
         XCTAssertEqual(model.volume, 0.8, "settles on what the device holds once the drag is written")
     }
 
-    func testAWriteScheduledForOneMicrophoneNeverLandsOnTheNext() async throws {
+    func testAChangeMadeElsewhereDuringADragIsPickedUpWhenItEnds() async throws {
+        backend.controls[Self.usb] = [Self.main: .init(volume: 0.2, settable: true)]
+        _ = model.begin(deviceUID: "usb")
+        model.set(0.5)
+        backend.changeElsewhere(Self.usb, element: Self.main, to: 0.3)
+        XCTAssertEqual(model.volume, 0.5, "taken for an echo while writing")
+
+        try await waitForWrites()
+        XCTAssertEqual(model.volume, 0.3, "then read back from the device")
+    }
+
+    func testTheEndOfADragIsWrittenWhenTheViewGoes() {
+        let token = model.begin(deviceUID: "built-in")
+        model.set(0.5)
+        model.set(0.6)
+        model.end(token)
+        XCTAssertEqual(backend.writes.filter { $0.element == 1 }.map(\.scalar), [0.5, 0.6])
+    }
+
+    func testADragFinishesOnItsMicrophoneAndNeverLandsOnTheNext() async throws {
         backend.controls[Self.usb] = [Self.main: .init(volume: 0.2, settable: true)]
         let token = model.begin(deviceUID: "built-in")
         model.set(0.5)
         model.set(0.6)
         model.retarget(token, deviceUID: "usb")
-        try await waitForWrites()
-        XCTAssertFalse(backend.writes.contains { $0.device == Self.usb })
+        XCTAssertEqual(backend.writes.filter { $0.element == 1 }.map(\.scalar), [0.5, 0.6])
         XCTAssertEqual(model.volume, 0.2)
+
+        // A write of the next microphone's own, whose interval outlasts the one left behind.
+        model.set(0.3)
+        try await waitForWrites()
+        XCTAssertEqual(backend.writes.filter { $0.device == Self.usb }.map(\.scalar), [0.3])
     }
 
     func testSetToMaximumTurnsItAllTheWayUp() {
@@ -303,6 +406,7 @@ final class InputVolumeModelTests: XCTestCase {
         XCTAssertEqual(backend.lookups, 0)
         XCTAssertTrue(backend.writes.isEmpty)
         XCTAssertTrue(backend.observations.isEmpty)
+        XCTAssertTrue(backend.topologyObservations.isEmpty)
         XCTAssertEqual(model.volume, 0.9, "the slider still moves in the probe")
     }
     #endif

@@ -21,9 +21,9 @@ enum SoundSettings {
     }
 }
 
-/// A listener on one volume control, kept until it is cancelled.
+/// A listener on one CoreAudio property, kept until it is cancelled.
 protocol InputVolumeObservation {
-    func cancel()
+    @MainActor func cancel()
 }
 
 /// The CoreAudio calls the volume needs. The real one talks to the HAL; tests use a stand-in, so no
@@ -38,8 +38,15 @@ protocol InputVolumeBackend: AnyObject {
     @discardableResult
     func setVolume(_ scalar: Float, _ device: AudioObjectID, element: AudioObjectPropertyElement) -> Bool
     /// Calls `onChange` on the main actor whenever that element's volume changes, whoever changed it.
+    @MainActor
     func observeVolume(_ device: AudioObjectID, element: AudioObjectPropertyElement,
                        onChange: @escaping @MainActor () -> Void) -> InputVolumeObservation
+    /// Calls `onChange` on the main actor when devices come and go, the system input changes, or
+    /// `device` switches data source: any of these can leave a resolved control pointing at an
+    /// object or element that is no longer the one Sound settings shows.
+    @MainActor
+    func observeTopology(of device: AudioObjectID?,
+                         onChange: @escaping @MainActor () -> Void) -> [InputVolumeObservation]
 }
 
 /// Which of a device's elements carry its input volume.
@@ -49,30 +56,33 @@ protocol InputVolumeBackend: AnyObject {
 /// is also what is written and watched, so the slider never shows one control while moving another.
 struct InputVolumeControl: Equatable {
     let device: AudioObjectID
-    /// Read and watched.
+    /// Read, watched and, when settable, written.
     let elements: [AudioObjectPropertyElement]
-    /// Written; empty when macOS lets nobody change this volume.
-    let writableElements: [AudioObjectPropertyElement]
+    /// False when macOS lets nobody change this volume.
+    let isSettable: Bool
 
-    var isSettable: Bool { !writableElements.isEmpty }
-
-    /// The main element when it is there and settable, else the channels, of which any settable one
-    /// is written. Read-only volumes are still shown, main element first.
+    /// The main element when it is there and settable, else the settable channels. A channel that
+    /// cannot be written is left out of a settable control: counted in, it would hold the mean
+    /// below what was just set, and the thumb would jump back after every drag. Read-only volumes
+    /// are still shown, main element first.
     static func resolve(device: AudioObjectID, backend: InputVolumeBackend) -> InputVolumeControl? {
         let main = kAudioObjectPropertyElementMain
         let hasMain = backend.hasVolume(device, element: main)
         if hasMain, backend.isVolumeSettable(device, element: main) {
-            return InputVolumeControl(device: device, elements: [main], writableElements: [main])
+            return InputVolumeControl(device: device, elements: [main], isSettable: true)
         }
         let channelCount = backend.inputChannelCount(of: device)
         let channels = channelCount > 0
             ? (1...AudioObjectPropertyElement(channelCount)).filter { backend.hasVolume(device, element: $0) }
             : []
         let writable = channels.filter { backend.isVolumeSettable(device, element: $0) }
-        if !writable.isEmpty || (!hasMain && !channels.isEmpty) {
-            return InputVolumeControl(device: device, elements: channels, writableElements: writable)
+        if !writable.isEmpty {
+            return InputVolumeControl(device: device, elements: writable, isSettable: true)
         }
-        return hasMain ? InputVolumeControl(device: device, elements: [main], writableElements: []) : nil
+        if hasMain {
+            return InputVolumeControl(device: device, elements: [main], isSettable: false)
+        }
+        return channels.isEmpty ? nil : InputVolumeControl(device: device, elements: channels, isSettable: false)
     }
 
     /// The mean of the elements read. Channels that disagree come out in between, and moving the
@@ -84,7 +94,8 @@ struct InputVolumeControl: Equatable {
     }
 
     func write(_ scalar: Float, to backend: InputVolumeBackend) {
-        for element in writableElements {
+        guard isSettable else { return }
+        for element in elements {
             backend.setVolume(scalar, device, element: element)
         }
     }
@@ -141,7 +152,7 @@ final class InputVolumeModel: ObservableObject {
     private var pendingScalar: Float?
     /// True from a write until the interval after it ends. Our own writes echo back through the
     /// listeners meanwhile, and would pull the thumb back under the user's pointer.
-    private var isWriting = false
+    private(set) var isWriting = false
     /// Bumped on every detach, so a write scheduled for one device never lands on the next.
     private var generation = 0
 
@@ -152,6 +163,8 @@ final class InputVolumeModel: ObservableObject {
 
     func stage(volume: Float?, isSettable: Bool) {
         isStaged = true
+        // A drag on a real device before the probe staged anything is not the probe's to finish.
+        pendingScalar = nil
         detach()
         self.volume = volume
         self.isSettable = isSettable
@@ -190,7 +203,8 @@ final class InputVolumeModel: ObservableObject {
     }
 
     /// Moves the device's volume to `scalar` (0…1). The slider shows it at once; the device gets it
-    /// at most once per write interval, and always gets the last value.
+    /// at most once per write interval, and always gets the last value, even when the view goes or
+    /// the microphone changes before the interval is up.
     func set(_ scalar: Float) {
         guard isSettable else { return }
         let clamped = min(max(scalar, 0), 1)
@@ -211,26 +225,38 @@ final class InputVolumeModel: ObservableObject {
         #if DEBUG
         if isStaged { return }
         #endif
-        guard let device = backend.device(forUID: deviceUID),
-              let control = InputVolumeControl.resolve(device: device, backend: backend) else {
+        let device = backend.device(forUID: deviceUID)
+        // Watched even when there is no volume to show, so a microphone plugged in or switched to
+        // afterwards brings the slider in.
+        observations = backend.observeTopology(of: device) { [weak self] in self?.topologyChanged() }
+        guard let device, let control = InputVolumeControl.resolve(device: device, backend: backend) else {
             volume = nil
             isSettable = false
             return
         }
         self.control = control
-        observations = control.elements.map { element in
+        observations += control.elements.map { element in
             backend.observeVolume(device, element: element) { [weak self] in self?.volumeChangedElsewhere() }
         }
         refresh()
     }
 
+    /// Writes what is left of a drag to the device it was meant for, before the model lets go of it.
     private func detach() {
+        if let scalar = pendingScalar, let control { control.write(scalar, to: backend) }
         observations.forEach { $0.cancel() }
         observations = []
         control = nil
         pendingScalar = nil
         isWriting = false
         generation &+= 1
+    }
+
+    /// The same UID can come back as another object (after coreaudiod restarts, or on wake), and
+    /// a data source change can move the volume to other elements: resolve the control again.
+    private func topologyChanged() {
+        guard !holders.isEmpty else { return }
+        attach()
     }
 
     private func volumeChangedElsewhere() {
