@@ -523,7 +523,9 @@ struct STextField: View {
     }
 
     var body: some View {
-        TextField(prompt, text: $text)
+        // The prompt in faint: the text colour below would otherwise draw it nearly as dark as
+        // a value already typed in.
+        TextField(text: $text, prompt: Text(prompt).foregroundColor(STheme.faint)) { Text(prompt) }
             .textFieldStyle(.plain)
             .scaledFont(size: 13, design: monospaced ? .monospaced : .default)
             .foregroundColor(STheme.textBright)

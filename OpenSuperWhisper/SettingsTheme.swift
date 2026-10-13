@@ -128,6 +128,7 @@ struct SEditor: View {
     var body: some View {
         TextEditor(text: $text)
             .scaledFont(size: fontSize, design: monospaced ? .monospaced : .default)
+            .foregroundColor(STheme.textBright)
             .scrollContentBackground(.hidden)
             .overlay(alignment: .topLeading) {
                 if let placeholder, text.isEmpty {
