@@ -23,6 +23,9 @@ enum QuietClipGain {
     static let frameLength = 320
     /// The frame, in loudness order, taken as the floor: the quiet between words.
     static let floorPercentile = 0.1
+    /// The frame, in loudness order, taken as the clip's loud part. Speech fills a good share of
+    /// a take; a single keyboard click in room noise does not, and must not count as signal.
+    static let loudPercentile = 0.9
 
     static let quietPeakAmplitude = amplitude(dB: quietPeakDBFS)
 
@@ -42,11 +45,16 @@ enum QuietClipGain {
         return min(amplitude(dB: targetPeakDBFS) / peak, amplitude(dB: maximumGainDB))
     }
 
+    /// Frames of exact digital zero are left out: a recorder that starts, or a Bluetooth mic still
+    /// connecting, writes some, and as the floor they made any room noise after them look like
+    /// speech standing 36 dB proud.
     private static func carriesSignal(_ samples: [Float]) -> Bool {
-        let frames = frameLevels(samples).sorted()
+        let frames = frameLevels(samples).filter { $0 > 0 }.sorted()
+        guard !frames.isEmpty else { return false }
         let floor = frames[Int(Double(frames.count - 1) * floorPercentile)]
-        guard let loudest = frames.last, floor > 0 else { return true }
-        return 20 * log10(loudest / floor) >= minimumDynamicRangeDB
+        let loud = frames[Int(Double(frames.count - 1) * loudPercentile)]
+        guard floor > 0 else { return true }
+        return 20 * log10(loud / floor) >= minimumDynamicRangeDB
     }
 
     private static func frameLevels(_ samples: [Float]) -> [Float] {

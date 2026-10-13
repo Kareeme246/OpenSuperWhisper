@@ -105,6 +105,29 @@ final class QuietClipGainTests: CoreTestCase {
         XCTAssertEqual(QuietClipGain.gain(for: noise), 1)
     }
 
+    /// A recorder that starts writes zeros first; as the floor they made the noise look like speech.
+    func testNoiseAfterDigitalZerosIsUnchanged() {
+        let clip = [Float](repeating: 0, count: Self.rate * 3 / 10) + Self.noise(count: Self.rate * 2, peakDBFS: -50)
+        XCTAssertEqual(QuietClipGain.gain(for: clip), 1)
+    }
+
+    /// One keyboard click in room noise is not speech.
+    func testNoiseWithASingleClickIsUnchanged() {
+        var clip = Self.noise(count: Self.rate * 2, peakDBFS: -55)
+        for index in 0..<160 { clip[Self.rate + index] = 0.02 * (index % 2 == 0 ? 1 : -1) }
+        XCTAssertEqual(QuietClipGain.gain(for: clip), 1)
+    }
+
+    /// Past ten seconds the converter splits the file and decodes the parts in parallel.
+    func testLongQuietTakesAreLiftedOnTheParallelPath() async throws {
+        let long = (0..<9).flatMap { _ in Self.speechLike(peakDBFS: -36) }
+        XCTAssertGreaterThan(long.count, Self.rate * 10)
+        for channels in [1, 3] {
+            let samples = try await converted(try writeWav(channels: channels, long))
+            XCTAssertEqual(Self.peakDBFS(samples), QuietClipGain.targetPeakDBFS, accuracy: 0.5, "\(channels) channel(s)")
+        }
+    }
+
     func testEmptyClipIsUnchanged() {
         XCTAssertEqual(QuietClipGain.lifted([]), [])
     }
