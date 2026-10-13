@@ -215,6 +215,13 @@ final class AgentInbox: ObservableObject {
         armedReplyID = nil
     }
 
+    #if DEBUG
+    /// Draws a reply being dictated in the snapshot probe, without a recording behind it.
+    func stageDictation(for id: String?) {
+        armedReplyID = id
+    }
+    #endif
+
     /// Hands the armed request to the recording that is stopping, and disarms.
     func takeArmedReply() -> String? {
         defer { armedReplyID = nil }

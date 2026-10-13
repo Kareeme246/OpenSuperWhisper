@@ -9,14 +9,20 @@ import OpenSuperWhisperCore
 @MainActor
 enum AgentPanelSnapshot {
     static func make(draft: String? = nil, showing kind: AgentRequest.Kind = .stop, focused: Bool = false,
-                     selecting: Bool = false) -> AnyView {
+                     selecting: Bool = false, liveText: (confirmed: String, volatile: String)? = nil,
+                     textScale: Double = TextScale.default) -> AnyView {
         AgentPanelController.shared.isSnapshotting = true
+        // Set every time: the screens share one run, and a large-text screen would otherwise
+        // carry its size into the ones drawn after it.
+        AppPreferences.shared.textScale = textScale
+        stageLiveText(liveText)
         // From the prose, through the list and the code block, into the table.
         MarkdownTextView.snapshotSelection = selecting ? ("instead of", "150 ms") : nil
         let requests = seed(stopMessage: selecting ? richMessage : stopMessage)
         AgentInbox.shared.reload()
         AgentInbox.shared.selectedID = requests.first { $0.kind == kind }?.id
         if let draft, let first = requests.first { AgentInbox.shared.drafts[first.id] = draft }
+        AgentInbox.shared.stageDictation(for: liveText == nil ? nil : AgentInbox.shared.current?.id)
         return AnyView(
             ZStack(alignment: .topTrailing) {
                 Color(nsColor: .underPageBackgroundColor)
@@ -25,6 +31,30 @@ enum AgentPanelSnapshot {
             }
         )
     }
+
+    /// A reply being dictated, with live text on: Parakeet streams, and the caption is staged
+    /// the way the indicator probe stages the bubble's.
+    /// Put back once the live screens are drawn, so the screens after them keep the probe's engine.
+    private static var engineBeforeLiveText: String?
+
+    private static func stageLiveText(_ text: (confirmed: String, volatile: String)?) {
+        let prefs = AppPreferences.shared
+        prefs.liveTranscriptionEnabled = text != nil
+        if text != nil {
+            if engineBeforeLiveText == nil { engineBeforeLiveText = prefs.selectedEngine }
+            prefs.selectedEngine = "fluidaudio"
+        } else if let engine = engineBeforeLiveText {
+            prefs.selectedEngine = engine
+            engineBeforeLiveText = nil
+        }
+        StreamingTranscriptionController.shared.stageCaption(confirmed: text?.confirmed ?? "",
+                                                             volatile: text?.volatile ?? "")
+    }
+
+    /// Three lines' worth at the default size, so the first one has scrolled away.
+    static let liveConfirmed = "Yes, open the PR, but before that rename the setting to restore delay "
+        + "and add a line about it in the release notes so people know where to find it"
+    static let liveVolatile = "and then ask Beverley"
 
     private static let stopMessage = """
         Done. The previous clipboard now comes back after **0.5 s** instead of 1 s, and the delay is a setting.
