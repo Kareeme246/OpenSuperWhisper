@@ -15661,6 +15661,16 @@
         }
       }
     },
+    "Report a bug, send an idea, or try a beta build": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signaler un bug, envoyer une idée ou essayer une version bêta"
+          }
+        }
+      }
+    },
     "Request a built-in preset…": {
       "localizations": {
         "fr": {
