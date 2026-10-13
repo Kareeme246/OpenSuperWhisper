@@ -2,18 +2,22 @@ import SwiftUI
 import OpenSuperWhisperCore
 
 /// The main window once onboarding is done: the sidebar with the everyday pages, the page
-/// itself, and the settings and Help opening over it as cards.
+/// itself, and the settings, Help and Feedback opening over it as cards.
 struct AppShellView: View {
     @StateObject private var viewModel = SettingsViewModel()
     @StateObject private var permissions = PermissionsManager()
     @ObservedObject private var navigation = AppNavigation.shared
     @ObservedObject private var fileDrop = FileDropHandler.shared
+    @StateObject private var feedback: FeedbackFormModel
     @State private var previousModelURL: URL?
 
-    /// For the layout tests, which open the settings on each rubric in turn.
-    init(page: AppPage = .home, settings rubric: SettingsRubric? = nil) {
+    /// For the layout tests, which open the settings on each rubric in turn, and the snapshot
+    /// probe, which hands in a Feedback draft it staged.
+    init(page: AppPage = .home, settings rubric: SettingsRubric? = nil,
+         feedback: @autoclosure @escaping () -> FeedbackFormModel = FeedbackFormModel()) {
         AppNavigation.shared.page = page
         AppNavigation.shared.settingsRubric = rubric
+        _feedback = StateObject(wrappedValue: feedback())
     }
 
     var body: some View {
@@ -39,10 +43,18 @@ struct AppShellView: View {
             } else if navigation.helpOpen {
                 HelpOverlay(viewModel: viewModel)
                     .transition(.opacity)
+            } else if navigation.feedbackOpen {
+                FeedbackOverlay(model: feedback)
+                    .transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.15), value: navigation.settingsRubric)
         .animation(.easeOut(duration: 0.15), value: navigation.helpOpen)
+        .animation(.easeOut(duration: 0.15), value: navigation.feedbackOpen)
+        // Whatever closed the card (✕, Esc, the sidebar, ⌘,), its thank-you is not shown again.
+        .onChange(of: navigation.feedbackOpen) { _, open in
+            if !open { feedback.cardClosed() }
+        }
         .environmentObject(permissions)
         .tint(STheme.accent)
         .frame(minWidth: 840, idealWidth: 1080, minHeight: 640, idealHeight: 760)
@@ -59,6 +71,7 @@ struct AppShellView: View {
         .onReceive(NotificationCenter.default.publisher(for: .showTranscriptions)) { _ in
             navigation.closeSettings()
             navigation.helpOpen = false
+            navigation.feedbackOpen = false
             navigation.page = .home
         }
         .onAppear {

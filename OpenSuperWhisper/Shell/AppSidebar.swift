@@ -2,7 +2,7 @@ import SwiftUI
 import OpenSuperWhisperCore
 
 /// The main window's sidebar: the app's name, the everyday pages, then the downloads, the
-/// readiness card, Settings and Help.
+/// readiness card, Feedback, Settings and Help.
 struct AppSidebar: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var permissions: PermissionsManager
@@ -23,20 +23,24 @@ struct AppSidebar: View {
                 .padding(.bottom, 8)
             StatusCard(permissions: permissions)
                 .padding(.bottom, 10)
+            footerRow(title: "Feedback", symbol: "heart.text.square", shortcut: nil) {
+                navigation.openFeedback()
+            }
+            .help("Report a bug or share an idea, without leaving the app")
             footerRow(title: "Settings", symbol: "gearshape", shortcut: "⌘,") {
                 navigation.openSettings(.dictation)
             }
             footerRow(title: "Help & what's new", symbol: "questionmark.circle", shortcut: nil,
                       dot: availableUpdateTag != nil) {
                 navigation.closeSettings()
+                navigation.feedbackOpen = false
                 navigation.helpOpen = true
             }
         }
         .padding(.horizontal, 14)
         .padding(.top, 44)
         .padding(.bottom, 16)
-        // Grows with the text size, so labels and the readiness card's button keep fitting.
-        .frame(width: 232 * min(max(textScale, 1), 1.45))
+        .frame(width: Self.width(textScale: textScale))
         .frame(maxHeight: .infinity, alignment: .top)
         .background(STheme.sidebarBg.ignoresSafeArea())
         .task {
@@ -44,6 +48,11 @@ struct AppSidebar: View {
                 availableUpdateTag = UpdateChecker.availableUpdate(in: releases)?.tagName
             }
         }
+    }
+
+    /// Grows with the text size, so labels and the readiness card's button keep fitting.
+    static func width(textScale: Double) -> CGFloat {
+        232 * min(max(textScale, 1), 1.45)
     }
 
     private var brand: some View {
@@ -69,6 +78,7 @@ struct AppSidebar: View {
         return Button {
             navigation.closeSettings()
             navigation.helpOpen = false
+            navigation.feedbackOpen = false
             navigation.go(page)
         } label: {
             HStack(spacing: 10) {

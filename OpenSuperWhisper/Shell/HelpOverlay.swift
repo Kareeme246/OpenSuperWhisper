@@ -8,8 +8,6 @@ struct HelpOverlay: View {
     @ObservedObject private var navigation = AppNavigation.shared
     @StateObject private var updates = ReleaseNotesModel()
 
-    private static let repository = "https://github.com/my-monkeys/OpenSuperWhisper"
-
     var body: some View {
         ModalCard(maxWidth: 760, onClose: close) {
             VStack(alignment: .leading, spacing: 0) {
@@ -90,18 +88,14 @@ struct HelpOverlay: View {
 
     private var feedbackGroup: some View {
         SettingsGroup("Feedback", subtitle: "Every report makes the app more stable.") {
-            HelpLinkRow(title: "Report a bug",
-                        subtitle: "On GitHub. Steps to reproduce, your macOS version and engine, logs if you have them.",
-                        symbol: "ladybug",
-                        url: "\(Self.repository)/issues/new")
-            HelpLinkRow(title: "Send feedback or an idea",
-                        subtitle: "A quick form on opensuperwhisper.com, no account needed.",
-                        symbol: "bubble.left.and.bubble.right",
-                        url: "https://opensuperwhisper.com/#feedback")
-            HelpLinkRow(title: "Try a beta build",
-                        subtitle: "Early features before they ship, on GitHub Releases.",
-                        symbol: "testtube.2",
-                        url: "\(Self.repository)/releases")
+            HelpActionRow(title: "Send feedback",
+                          subtitle: "Report a bug or share an idea, right here. No account needed.",
+                          symbol: "bubble.left.and.bubble.right") {
+                navigation.openFeedback()
+            }
+            ForEach(FeedbackLink.all) { link in
+                HelpLinkRow(title: link.title, subtitle: link.subtitle, symbol: link.symbol, url: link.url)
+            }
         }
     }
 
@@ -110,11 +104,11 @@ struct HelpOverlay: View {
             HelpLinkRow(title: "Support us",
                         subtitle: "OpenSuperWhisper is free and open source. A coffee on Ko-fi keeps it going.",
                         symbol: "heart",
-                        url: "https://ko-fi.com/mymonkey")
+                        url: URL(string: "https://ko-fi.com/mymonkey")!)
             HelpLinkRow(title: "Source code on GitHub",
                         subtitle: "Version \(UpdateChecker.currentVersion). Star it, read it, open a pull request.",
                         symbol: "chevron.left.forwardslash.chevron.right",
-                        url: Self.repository)
+                        url: FeedbackLink.repository)
         }
     }
 
@@ -138,38 +132,56 @@ private struct HelpLinkRow: View {
     let title: LocalizedStringKey
     let subtitle: LocalizedStringKey
     let symbol: String
-    let url: String
+    let url: URL
 
     var body: some View {
-        Button {
-            if let target = URL(string: url) { NSWorkspace.shared.open(target) }
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: symbol)
-                    .scaledFont(size: 15, weight: .medium)
-                    .foregroundColor(STheme.accent)
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .scaledFont(size: 15, weight: .semibold)
-                        .foregroundColor(STheme.textBright)
-                    Text(subtitle)
-                        .scaledFont(size: 13)
-                        .foregroundColor(STheme.hint)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .layoutPriority(1)
-                Spacer(minLength: 0)
-                Image(systemName: "arrow.up.right")
-                    .scaledFont(size: 12, weight: .semibold)
-                    .foregroundColor(STheme.hint)
-            }
-            .padding(.horizontal, 16).padding(.vertical, 12)
-            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-            .contentShape(Rectangle())
+        HelpActionRow(title: title, subtitle: subtitle, symbol: symbol, leavesApp: true) {
+            NSWorkspace.shared.open(url)
+        }
+    }
+}
+
+/// A whole-row action: icon, title, one sentence, then a ↗ when it leaves the app or a › when
+/// it opens something inside it.
+private struct HelpActionRow: View {
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
+    let symbol: String
+    var leavesApp = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            label
         }
         .buttonStyle(.plain)
         .overlay(alignment: .top) { Rectangle().fill(STheme.border).frame(height: 1) }
+    }
+
+    private var label: some View {
+        HStack(spacing: 14) {
+            Image(systemName: symbol)
+                .scaledFont(size: 15, weight: .medium)
+                .foregroundColor(STheme.accent)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .scaledFont(size: 15, weight: .semibold)
+                    .foregroundColor(STheme.textBright)
+                Text(subtitle)
+                    .scaledFont(size: 13)
+                    .foregroundColor(STheme.hint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .layoutPriority(1)
+            Spacer(minLength: 0)
+            Image(systemName: leavesApp ? "arrow.up.right" : "chevron.right")
+                .scaledFont(size: 12, weight: .semibold)
+                .foregroundColor(STheme.hint)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }
 

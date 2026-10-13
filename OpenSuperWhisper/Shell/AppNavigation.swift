@@ -73,9 +73,9 @@ enum SettingsRubric: String, CaseIterable, Identifiable {
     }
 }
 
-/// Where the main window is: which page, whether the settings or Help are open over it, and
-/// which setting to bring into view. One shared instance so the menu bar, ⌘, and other windows
-/// can route the main window without holding a reference to it.
+/// Where the main window is: which page, whether the settings, Help or Feedback are open over
+/// it, and which setting to bring into view. One shared instance so the menu bar, ⌘, and other
+/// windows can route the main window without holding a reference to it.
 @MainActor
 final class AppNavigation: ObservableObject {
     static let shared = AppNavigation()
@@ -86,13 +86,22 @@ final class AppNavigation: ObservableObject {
     /// A row title to scroll to once its rubric is showing (set by the settings search).
     @Published var settingsFocusRow: String?
     @Published var helpOpen = false
+    @Published var feedbackOpen = false
     /// Text of the window's search field. Filters the Home feed.
     @Published var searchText = ""
 
     func openSettings(_ rubric: SettingsRubric = .dictation, focusing row: String? = nil) {
         helpOpen = false
+        feedbackOpen = false
         settingsRubric = rubric
         settingsFocusRow = row
+    }
+
+    /// One card at a time: Feedback replaces the settings or Help when it opens.
+    func openFeedback() {
+        closeSettings()
+        helpOpen = false
+        feedbackOpen = true
     }
 
     func closeSettings() {

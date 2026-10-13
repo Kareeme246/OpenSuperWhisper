@@ -28,6 +28,14 @@ enum UISnapshotProbe {
             return AnyView(AppShellView(page: .home, settings: .models))
         },
         "help": { AppNavigation.shared.helpOpen = true; return AnyView(AppShellView(page: .home)) },
+        "feedback-form": { feedbackCard() },
+        "feedback-form-bug": { feedbackCard(stagedBug: true) },
+        "feedback-form-bug-large-text": {
+            AppPreferences.shared.textScale = TextScale.maximum
+            return feedbackCard(stagedBug: true)
+        },
+        "feedback-form-too-long": { feedbackCard(message: String(repeating: "Log line: dictation stopped. ", count: 140)) },
+        "feedback-sent": { feedbackCard(status: .sent) },
         "mic-picker": { microphonePicker(.speaking) },
         "mic-picker-low": { microphonePicker(.murmuring) },
         "mic-picker-quiet": { microphonePicker(.tooQuiet) },
@@ -139,6 +147,25 @@ enum UISnapshotProbe {
         return view
     }
 
+    /// Home with the Feedback card open on a staged draft. Its sender fails without a request
+    /// ever being made: the endpoint notifies the owner, and a snapshot is never meant to.
+    private static func feedbackCard(stagedBug: Bool = false, message: String? = nil,
+                                     status: FeedbackFormModel.Status = .editing) -> AnyView {
+        let model = FeedbackFormModel(sender: FeedbackSender(transport: { _ in throw URLError(.cancelled) }))
+        if let message {
+            model.kind = .bug
+            model.message = message
+        }
+        if stagedBug {
+            model.kind = .bug
+            model.message = "The bubble stays on screen after I stop dictating in Mail. It goes away once I click elsewhere."
+            model.email = "camille@example.com"
+        }
+        model.stageStatus(status)
+        AppNavigation.shared.feedbackOpen = true
+        return AnyView(AppShellView(page: .home, feedback: model))
+    }
+
     static func run(outputDir: String, names: [String]) -> Never {
         guard DefaultsStore.isRunningTests else {
             FileHandle.standardError.write(Data("ui-snapshot: set XCTestConfigurationFilePath=/dev/null so it runs isolated\n".utf8))
@@ -181,6 +208,7 @@ enum UISnapshotProbe {
             }
             for dark in [false, true] {
                 AppNavigation.shared.helpOpen = false
+                AppNavigation.shared.feedbackOpen = false
                 // A large-text screen would otherwise leave every later screen of the run large.
                 AppPreferences.shared.textScale = TextScale.default
                 let view = make()
