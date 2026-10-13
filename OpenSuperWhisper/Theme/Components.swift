@@ -656,15 +656,17 @@ struct ModalCard<Content: View>: View {
     }
 }
 
-/// Offers its content at most `maxHeight` and takes the height the content asks for, where
+/// As tall as the content would like, but no taller than `maxHeight` or the room offered, where
 /// `.frame(maxHeight:)` takes all it is offered and leaves a short content floating in the middle.
+/// A ScrollView inside asks for its whole content, and only scrolls once that does not fit.
 private struct HeightCap: Layout {
     let maxHeight: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let capped = ProposedViewSize(width: proposal.width,
-                                      height: min(proposal.height ?? maxHeight, maxHeight))
-        return subviews.first?.sizeThatFits(capped) ?? .zero
+        guard let content = subviews.first else { return .zero }
+        let ideal = content.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        let room = min(proposal.height ?? maxHeight, maxHeight)
+        return content.sizeThatFits(ProposedViewSize(width: proposal.width, height: min(ideal.height, room)))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {

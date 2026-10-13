@@ -3161,6 +3161,16 @@
         }
       }
     },
+    "It was turned down as it is. Shorten it, or open an issue on GitHub.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le message a été refusé tel quel. Raccourcissez-le, ou ouvrez un ticket sur GitHub."
+          }
+        }
+      }
+    },
     "Keep at most": {
       "localizations": {
         "fr": {
@@ -7601,6 +7611,16 @@
         }
       }
     },
+    "That email address is too long.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette adresse e-mail est trop longue."
+          }
+        }
+      }
+    },
     "The text appears after a short delay and is a rough live preview — it may differ from the final result. The text that actually gets inserted always comes from the full, accurate transcription, not from this preview.": {
       "localizations": {
         "fr": {
@@ -7677,6 +7697,16 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Ngưỡng phát hiện giọng nói và im lặng"
+          }
+        }
+      }
+    },
+    "Too long to send. Shorten it, or open an issue on GitHub.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop long pour être envoyé. Raccourcissez-le, ou ouvrez un ticket sur GitHub."
           }
         }
       }

@@ -76,6 +76,35 @@ final class FeedbackSenderTests: XCTestCase {
         XCTAssertEqual(request.timeoutInterval, 15)
     }
 
+    func testItSaysOnlyTheAppNameAboutWhoIsSending() throws {
+        let request = try FeedbackSender.request(for: FeedbackSubmission(
+            kind: .idea, message: "Hi", email: "", details: nil))
+
+        XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "OpenSuperWhisper",
+                       "the system User-Agent names the build and the OS, details switch or not")
+        XCTAssertEqual(request.allHTTPHeaderFields, [
+            "Content-Type": "application/json",
+            "User-Agent": "OpenSuperWhisper",
+        ])
+        XCTAssertFalse(request.httpShouldHandleCookies)
+    }
+
+    func testTheSessionKeepsNothingBetweenSends() {
+        let configuration = FeedbackSender.sessionConfiguration
+        XCTAssertNil(configuration.httpCookieStorage)
+        XCTAssertFalse(configuration.httpShouldSetCookies)
+        XCTAssertNil(configuration.urlCache)
+        XCTAssertNil(configuration.urlCredentialStorage)
+        XCTAssertEqual(configuration.httpAdditionalHeaders?["User-Agent"] as? String, "OpenSuperWhisper")
+    }
+
+    func testSlashesAreNotEscaped() throws {
+        let request = try FeedbackSender.request(for: FeedbackSubmission(
+            kind: .bug, message: "Crash in /Applications/OpenSuperWhisper.app", email: "", details: nil))
+        let body = try XCTUnwrap(request.httpBody.flatMap { String(data: $0, encoding: .utf8) })
+        XCTAssertTrue(body.contains("/Applications/OpenSuperWhisper.app"), body)
+    }
+
     func testABugWithAnEmailAndTheDetails() throws {
         let request = try FeedbackSender.request(for: FeedbackSubmission(
             kind: .bug, message: "  The bubble stays on screen.\n", email: " camille@example.com ",
@@ -108,20 +137,68 @@ final class FeedbackSenderTests: XCTestCase {
         XCTAssertEqual(stub.requests.count, 1)
     }
 
-    func testAnErrorStatusIsAFailure() async {
-        let stub = FeedbackTransportStub(reply: .status(500))
+    private func sendError(_ reply: FeedbackTransportStub.Reply) async -> FeedbackSendError? {
         do {
-            try await stub.sender.send(FeedbackSubmission(kind: .idea, message: "Hi", email: "", details: nil))
-            XCTFail("a 500 was taken for a success")
-        } catch {}
+            try await FeedbackTransportStub(reply: reply).sender.send(
+                FeedbackSubmission(kind: .idea, message: "Hi", email: "", details: nil))
+            return nil
+        } catch {
+            return error as? FeedbackSendError
+        }
     }
 
-    func testANetworkErrorIsAFailure() async {
-        let stub = FeedbackTransportStub(reply: .failure(.notConnectedToInternet))
-        do {
-            try await stub.sender.send(FeedbackSubmission(kind: .idea, message: "Hi", email: "", details: nil))
-            XCTFail("an offline send was taken for a success")
-        } catch {}
+    func testAServerErrorIsWorthRetrying() async {
+        let error = await sendError(.status(500))
+        XCTAssertEqual(error, .unreachable)
+    }
+
+    func testANetworkErrorIsWorthRetrying() async {
+        let error = await sendError(.failure(.notConnectedToInternet))
+        XCTAssertEqual(error, .unreachable)
+    }
+
+    func testA4xxIsARefusalNotAConnectionProblem() async {
+        for status in [400, 413] {
+            let error = await sendError(.status(status))
+            XCTAssertEqual(error, .refused(status: status))
+        }
+    }
+}
+
+/// The API's limits, checked before Send is offered: past them it answers 4xx, and no retry helps.
+final class FeedbackLimitsTests: XCTestCase {
+
+    private func fits(_ message: String, email: String = "") -> Bool {
+        FeedbackSender.fitsLimits(FeedbackSubmission(kind: .bug, message: message, email: email,
+                                                     details: sampleDetails))
+    }
+
+    func testTheMessageIsCappedAt4000Characters() {
+        XCTAssertTrue(fits(String(repeating: "a", count: 4000)))
+        XCTAssertFalse(fits(String(repeating: "a", count: 4001)))
+    }
+
+    func testSpacesAroundTheMessageDoNotCount() {
+        XCTAssertTrue(fits("\n  " + String(repeating: "a", count: 4000) + "  \n"))
+    }
+
+    func testCharactersAreCountedAsTheServerCountsThem() {
+        // Two UTF-16 units each, as JavaScript's length counts them.
+        XCTAssertFalse(fits(String(repeating: "🍌", count: 2001)))
+    }
+
+    func testABodyOver8KBIsRefusedEvenUnder4000Characters() {
+        // Three bytes each in UTF-8: 2800 characters make an 8.4 KB body.
+        let cjk = String(repeating: "日", count: 2800)
+        XCTAssertLessThan(cjk.utf16.count, FeedbackSender.maxMessageLength)
+        XCTAssertFalse(fits(cjk))
+        XCTAssertTrue(fits(String(repeating: "日", count: 2600)))
+    }
+
+    func testTheEmailIsCappedAt200Characters() {
+        let local = String(repeating: "a", count: 188)
+        XCTAssertTrue(fits("Hello", email: local + "@example.com"))
+        XCTAssertFalse(fits("Hello", email: local + "x@example.com"))
     }
 }
 
@@ -232,6 +309,60 @@ final class FeedbackFormModelTests: XCTestCase {
         await sending.value
         XCTAssertEqual(model.status, .sent)
         XCTAssertEqual(stub.requests.count, 1)
+    }
+
+    func testALongMessageShowsACounterThenCannotBeSent() {
+        let model = makeModel(FeedbackTransportStub())
+        model.message = String(repeating: "a", count: FeedbackFormModel.counterThreshold - 1)
+        XCTAssertFalse(model.showsCounter)
+        model.message += "a"
+        XCTAssertTrue(model.showsCounter)
+        XCTAssertTrue(model.canSend)
+
+        model.message = String(repeating: "a", count: FeedbackSender.maxMessageLength + 1)
+        XCTAssertEqual(model.messageLength, 4001)
+        XCTAssertEqual(model.limitProblem, .messageTooLong)
+        XCTAssertFalse(model.canSend)
+    }
+
+    func testATooLongEmailCannotBeSent() {
+        let model = makeModel(FeedbackTransportStub())
+        model.message = "Hello"
+        model.email = String(repeating: "a", count: 190) + "@example.com"
+        XCTAssertEqual(model.limitProblem, .emailTooLong)
+        XCTAssertFalse(model.canSend)
+    }
+
+    func testARefusalIsNotTakenForAConnectionProblem() async {
+        let stub = FeedbackTransportStub(reply: .status(400))
+        let model = makeModel(stub)
+        model.message = "It crashed"
+
+        await model.send()
+
+        XCTAssertEqual(model.status, .refused)
+        XCTAssertEqual(model.message, "It crashed", "a refusal lost the text")
+    }
+
+    func testCancelDoesNothingWhileSending() async {
+        let stub = FeedbackTransportStub(reply: .failure(.timedOut), holds: true)
+        let model = makeModel(stub)
+        model.kind = .bug
+        model.message = "It crashed"
+
+        let sending = Task { await model.send() }
+        while !stub.isHeld { await Task.yield() }
+        XCTAssertFalse(model.isEditable)
+        model.discard()
+        XCTAssertEqual(model.message, "It crashed", "Cancel dropped a draft still being sent")
+        XCTAssertEqual(model.status, .sending)
+
+        stub.release()
+        await sending.value
+        XCTAssertEqual(model.status, .failed)
+        XCTAssertEqual(model.kind, .bug)
+        XCTAssertEqual(model.message, "It crashed", "the failure came back over an empty form")
+        XCTAssertTrue(model.isEditable)
     }
 
     func testCancelDropsTheDraftButClosingKeepsIt() {

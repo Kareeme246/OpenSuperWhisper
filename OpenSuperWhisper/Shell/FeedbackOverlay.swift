@@ -7,6 +7,13 @@ struct FeedbackOverlay: View {
     @ObservedObject var model: FeedbackFormModel
     @ObservedObject private var navigation = AppNavigation.shared
     @Environment(\.textScaleFactor) private var textScale
+    @Environment(\.locale) private var locale
+    @FocusState private var messageFocused: Bool
+
+    /// The message box grows with the text size only this far, so at the largest size in a small
+    /// window the switch and the line it sends stay in view above the footer.
+    private static let editorBaseHeight: CGFloat = 104
+    private static let editorMaxHeight: CGFloat = 130
 
     var body: some View {
         ModalCard(maxWidth: 600, maxHeight: 900, hugsContent: true, onClose: close) {
@@ -15,10 +22,10 @@ struct FeedbackOverlay: View {
                 if model.status == .sent {
                     thanks
                 } else {
-                    ViewThatFits(in: .vertical) {
-                        form
-                        ScrollView { form }
-                    }
+                    // One copy of the form, scrolling only when the window is too short for it:
+                    // swapping copies would rebuild the fields and lose the caret mid-sentence.
+                    ScrollView { form }
+                        .scrollBounceBehavior(.basedOnSize)
                     footer
                 }
             }
@@ -61,24 +68,54 @@ struct FeedbackOverlay: View {
                 (FeedbackKind.bug, "Report a bug"),
                 (FeedbackKind.idea, "Share an idea"),
             ])
-            SEditor(text: $model.message, height: 104 * textScale, fontSize: 14, monospaced: false,
-                    placeholder: model.kind == .bug
-                        ? "What happened, and what did you expect?"
-                        : "What would make OpenSuperWhisper better for you?")
-                .accessibilityLabel(Text("Message"))
+            .disabled(!model.isEditable)
+            messageField
+            // Right under the message, before the optional email: at the largest text size in a
+            // small window, what goes with the message is still in view above Send.
+            detailsRow
             VStack(alignment: .leading, spacing: 6) {
                 Text("Email (optional, if you'd like an answer)")
                     .scaledFont(size: 13, weight: .semibold)
                     .foregroundColor(STheme.textBright)
                 // Not an address as the prompt: a localized key turns one into a blue link.
                 STextField("Only used to answer you", text: $model.email, width: nil)
+                    .disabled(!model.isEditable)
             }
-            detailsRow
             otherWays
         }
         .padding(.horizontal, 26).padding(.vertical, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
+        // A text view takes Esc for word completion, so the card's own Esc never hears it.
+        .onKeyPress(.escape) {
+            close()
+            return .handled
+        }
+    }
+
+    private var messageField: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            SEditor(text: $model.message,
+                    height: min(Self.editorBaseHeight * textScale, Self.editorMaxHeight),
+                    fontSize: 14, monospaced: false,
+                    placeholder: model.kind == .bug
+                        ? "What happened, and what did you expect?"
+                        : "What would make OpenSuperWhisper better for you?")
+                .focused($messageFocused)
+                .disabled(!model.isEditable)
+                .accessibilityLabel(Text("Message"))
+                .onAppear {
+                    // Once the card has laid the editor out, or the focus request is dropped.
+                    DispatchQueue.main.async { messageFocused = true }
+                }
+            if model.showsCounter {
+                Text(verbatim: "\(count(model.messageLength)) / \(count(FeedbackSender.maxMessageLength))")
+                    .scaledFont(size: 12, weight: .medium)
+                    .monospacedDigit()
+                    .foregroundColor(model.messageLength > FeedbackSender.maxMessageLength
+                                     ? STheme.warn : STheme.hint)
+            }
+        }
     }
 
     private var detailsRow: some View {
@@ -102,6 +139,7 @@ struct FeedbackOverlay: View {
             Spacer(minLength: 0)
             SSwitch(isOn: $model.includeDetails)
                 .accessibilityLabel(Text("Include app details"))
+                .disabled(!model.isEditable)
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(STheme.advancedBg))
@@ -137,6 +175,7 @@ struct FeedbackOverlay: View {
             Spacer(minLength: 0)
             Button("Cancel", action: cancel)
                 .buttonStyle(.sSecondary)
+                .disabled(!model.isEditable)
             Button("Send") { Task { await model.send() } }
                 .buttonStyle(.sPrimary)
                 .disabled(!model.canSend)
@@ -148,27 +187,39 @@ struct FeedbackOverlay: View {
 
     @ViewBuilder
     private var statusLine: some View {
-        switch model.status {
-        case .sending:
+        if model.status == .sending {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
                 Text("Sending…")
                     .scaledFont(size: 13)
                     .foregroundColor(STheme.hint)
             }
-        case .failed:
-            Label {
-                Text("Couldn't send it. Check your connection and try again.")
-                    .scaledFont(size: 13, weight: .medium)
-                    .fixedSize(horizontal: false, vertical: true)
-            } icon: {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .scaledFont(size: 13)
+        } else if let problem = model.limitProblem {
+            switch problem {
+            case .messageTooLong: warning("Too long to send. Shorten it, or open an issue on GitHub.")
+            case .emailTooLong: warning("That email address is too long.")
             }
-            .foregroundColor(STheme.warn)
-        case .editing, .sent:
-            EmptyView()
+        } else if model.status == .refused {
+            warning("It was turned down as it is. Shorten it, or open an issue on GitHub.")
+        } else if model.status == .failed {
+            warning("Couldn't send it. Check your connection and try again.")
         }
+    }
+
+    private func warning(_ text: LocalizedStringKey) -> some View {
+        Label {
+            Text(text)
+                .scaledFont(size: 13, weight: .medium)
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .scaledFont(size: 13)
+        }
+        .foregroundColor(STheme.warn)
+    }
+
+    private func count(_ value: Int) -> String {
+        value.formatted(.number.locale(locale))
     }
 
     private var thanks: some View {

@@ -5,10 +5,19 @@ import Foundation
 @MainActor
 final class FeedbackFormModel: ObservableObject {
     enum Status: Equatable {
-        case editing, sending, sent, failed
+        /// `failed`: worth another try. `refused`: the API turned this message down, so the
+        /// same text will never get through.
+        case editing, sending, sent, failed, refused
+    }
+
+    /// What keeps a message within the API's limits from being sent as it stands.
+    enum LimitProblem: Equatable {
+        case messageTooLong, emailTooLong
     }
 
     static let minimumMessageLength = 2
+    /// The character counter shows from here on, so a long report sees the limit coming.
+    static let counterThreshold = FeedbackSender.maxMessageLength * 9 / 10
 
     @Published var kind: FeedbackKind = .idea
     @Published var message = ""
@@ -29,9 +38,25 @@ final class FeedbackFormModel: ObservableObject {
     /// The exact line sent when "Include app details" is on.
     var details: String { appDetails() }
 
+    /// Off while a send is in flight: Cancel would drop a draft the request still carries, and
+    /// a success clears the form, words typed after Send included.
+    var isEditable: Bool { status != .sending }
+
     var canSend: Bool {
-        status != .sending
+        isEditable
             && message.filter { !$0.isWhitespace }.count >= Self.minimumMessageLength
+            && limitProblem == nil
+    }
+
+    /// Counted as the API counts: UTF-16 units of the trimmed text.
+    var messageLength: Int { submission.trimmedMessage.utf16.count }
+
+    var showsCounter: Bool { messageLength >= Self.counterThreshold }
+
+    var limitProblem: LimitProblem? {
+        let submission = submission
+        if submission.trimmedEmail.utf16.count > FeedbackSender.maxEmailLength { return .emailTooLong }
+        return FeedbackSender.fitsLimits(submission) ? nil : .messageTooLong
     }
 
     var submission: FeedbackSubmission {
@@ -46,6 +71,8 @@ final class FeedbackFormModel: ObservableObject {
             try await sender.send(submission)
             clearDraft()
             status = .sent
+        } catch FeedbackSendError.refused {
+            status = .refused
         } catch {
             status = .failed
         }
@@ -57,8 +84,10 @@ final class FeedbackFormModel: ObservableObject {
         if status != .sending { status = .editing }
     }
 
-    /// Cancel: the draft is dropped, unlike a click outside the card.
+    /// Cancel: the draft is dropped, unlike a click outside the card. Not while it is being
+    /// sent: a failure would then come back over an empty form.
     func discard() {
+        guard isEditable else { return }
         clearDraft()
         cardClosed()
     }

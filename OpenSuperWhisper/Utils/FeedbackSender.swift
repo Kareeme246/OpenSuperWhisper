@@ -18,6 +18,17 @@ struct FeedbackSubmission: Equatable {
     var context: String {
         (["app", kind.rawValue] + [details].compactMap { $0 }).joined(separator: " · ")
     }
+
+    var trimmedMessage: String { message.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedEmail: String { email.trimmingCharacters(in: .whitespacesAndNewlines) }
+}
+
+/// Why a message did not get through.
+enum FeedbackSendError: Error, Equatable {
+    /// The API answered 4xx: it will turn the same message down again, so retrying is no use.
+    case refused(status: Int)
+    /// Offline, timed out, or a server error: the same message may go through later.
+    case unreachable
 }
 
 /// Posts a feedback message to the same endpoint as the form on opensuperwhisper.com. The API is
@@ -29,29 +40,78 @@ struct FeedbackSender {
     static let endpoint = URL(string: "https://git.my-monkey.fr/api/feedback")!
     static let product = "opensuperwhisper"
     static let timeout: TimeInterval = 15
+    /// The API stores the User-Agent with each message. The system's own names the build, the
+    /// CFNetwork and the Darwin version, which would go out even with the app details off.
+    static let userAgent = "OpenSuperWhisper"
 
-    var transport: Transport = { try await URLSession.shared.data(for: $0) }
+    /// The API's limits: it answers 400 past 4000 UTF-16 units of trimmed message (JavaScript's
+    /// `length`), and refuses any body over 8 KB, which mostly-CJK or emoji text reaches first.
+    static let maxMessageLength = 4000
+    static let maxEmailLength = 200
+    static let maxBodyBytes = 8 * 1024
+
+    var transport: Transport = { try await FeedbackSender.session.data(for: $0) }
+
+    /// No cookies, no cache, no credentials kept between sends, and the neutral User-Agent.
+    static let sessionConfiguration: URLSessionConfiguration = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.httpCookieAcceptPolicy = .never
+        configuration.urlCache = nil
+        configuration.urlCredentialStorage = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.httpAdditionalHeaders = ["User-Agent": userAgent]
+        return configuration
+    }()
+
+    private static let session = URLSession(configuration: sessionConfiguration)
 
     func send(_ submission: FeedbackSubmission) async throws {
-        let (_, response) = try await transport(try Self.request(for: submission))
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw URLError(.badServerResponse)
+        let request = try Self.request(for: submission)
+        let response: URLResponse
+        do {
+            (_, response) = try await transport(request)
+        } catch {
+            throw FeedbackSendError.unreachable
+        }
+        guard let http = response as? HTTPURLResponse else { throw FeedbackSendError.unreachable }
+        switch http.statusCode {
+        case 200..<300: return
+        case 400..<500: throw FeedbackSendError.refused(status: http.statusCode)
+        default: throw FeedbackSendError.unreachable
         }
     }
 
+    /// Whether the API would take this message as it stands, checked before Send is offered.
+    static func fitsLimits(_ submission: FeedbackSubmission) -> Bool {
+        guard submission.trimmedMessage.utf16.count <= maxMessageLength,
+              submission.trimmedEmail.utf16.count <= maxEmailLength,
+              let body = try? body(for: submission) else { return false }
+        return body.count <= maxBodyBytes
+    }
+
     static func request(for submission: FeedbackSubmission) throws -> URLRequest {
-        var request = URLRequest(url: endpoint, timeoutInterval: timeout)
+        var request = URLRequest(url: endpoint, cachePolicy: .reloadIgnoringLocalCacheData,
+                                 timeoutInterval: timeout)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let email = submission.email.trimmingCharacters(in: .whitespacesAndNewlines)
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        request.httpShouldHandleCookies = false
+        request.httpBody = try body(for: submission)
+        return request
+    }
+
+    private static func body(for submission: FeedbackSubmission) throws -> Data {
+        let email = submission.trimmedEmail
         let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        request.httpBody = try encoder.encode(Body(
-            message: submission.message.trimmingCharacters(in: .whitespacesAndNewlines),
+        // Unescaped slashes: a pasted path or URL would otherwise cost a byte more per slash.
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return try encoder.encode(Body(
+            message: submission.trimmedMessage,
             email: email.isEmpty ? nil : email,
             product: product,
             context: submission.context))
-        return request
     }
 
     /// The website's shape. `email` is left out rather than sent empty, as the site does.

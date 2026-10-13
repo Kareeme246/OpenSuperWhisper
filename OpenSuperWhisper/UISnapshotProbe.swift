@@ -34,6 +34,7 @@ enum UISnapshotProbe {
             AppPreferences.shared.textScale = TextScale.maximum
             return feedbackCard(stagedBug: true)
         },
+        "feedback-form-too-long": { feedbackCard(message: String(repeating: "Log line: dictation stopped. ", count: 140)) },
         "feedback-sent": { feedbackCard(status: .sent) },
         "onboarding": { AnyView(OnboardingView().environmentObject(AppState())) },
         "onboarding-2": { AnyView(OnboardingView(initialStep: .model).environmentObject(AppState())) },
@@ -73,9 +74,13 @@ enum UISnapshotProbe {
 
     /// Home with the Feedback card open on a staged draft. Its sender fails without a request
     /// ever being made: the endpoint notifies the owner, and a snapshot is never meant to.
-    private static func feedbackCard(stagedBug: Bool = false,
+    private static func feedbackCard(stagedBug: Bool = false, message: String? = nil,
                                      status: FeedbackFormModel.Status = .editing) -> AnyView {
         let model = FeedbackFormModel(sender: FeedbackSender(transport: { _ in throw URLError(.cancelled) }))
+        if let message {
+            model.kind = .bug
+            model.message = message
+        }
         if stagedBug {
             model.kind = .bug
             model.message = "The bubble stays on screen after I stop dictating in Mail. It goes away once I click elsewhere."
