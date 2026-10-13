@@ -8,7 +8,6 @@ struct AppSidebar: View {
     @ObservedObject var permissions: PermissionsManager
     @ObservedObject private var navigation = AppNavigation.shared
     @State private var availableUpdateTag: String?
-    @State private var feedbackOpen = false
     @Environment(\.textScaleFactor) private var textScale
 
     var body: some View {
@@ -25,19 +24,16 @@ struct AppSidebar: View {
             StatusCard(permissions: permissions)
                 .padding(.bottom, 10)
             footerRow(title: "Feedback", symbol: "heart.text.square", shortcut: nil) {
-                feedbackOpen.toggle()
+                navigation.openFeedback()
             }
-            .help("Report a bug, send an idea, or try a beta build")
-            .popover(isPresented: $feedbackOpen, arrowEdge: .trailing) {
-                FeedbackMenu { feedbackOpen = false }
-                    .presentationBackground(STheme.cardBg)
-            }
+            .help("Report a bug or share an idea, without leaving the app")
             footerRow(title: "Settings", symbol: "gearshape", shortcut: "⌘,") {
                 navigation.openSettings(.dictation)
             }
             footerRow(title: "Help & what's new", symbol: "questionmark.circle", shortcut: nil,
                       dot: availableUpdateTag != nil) {
                 navigation.closeSettings()
+                navigation.feedbackOpen = false
                 navigation.helpOpen = true
             }
         }
@@ -82,6 +78,7 @@ struct AppSidebar: View {
         return Button {
             navigation.closeSettings()
             navigation.helpOpen = false
+            navigation.feedbackOpen = false
             navigation.go(page)
         } label: {
             HStack(spacing: 10) {

@@ -621,6 +621,8 @@ struct SFilterChip: View {
 struct ModalCard<Content: View>: View {
     var maxWidth: CGFloat = 1040
     var maxHeight: CGFloat = 720
+    /// As tall as the content rather than as tall as the window allows, for a short form.
+    var hugsContent = false
     var onClose: () -> Void
     @ViewBuilder var content: () -> Content
 
@@ -630,8 +632,7 @@ struct ModalCard<Content: View>: View {
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onClose)
-            content()
-                .frame(maxWidth: maxWidth, maxHeight: maxHeight)
+            sizedContent
                 .background(STheme.cardBg)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(STheme.border, lineWidth: 1))
@@ -639,6 +640,33 @@ struct ModalCard<Content: View>: View {
                 .padding(28)
         }
         .onExitCommand(perform: onClose)
+    }
+
+    @ViewBuilder
+    private var sizedContent: some View {
+        if hugsContent {
+            HeightCap(maxHeight: maxHeight) { content() }
+                .frame(maxWidth: maxWidth)
+        } else {
+            content()
+                .frame(maxWidth: maxWidth, maxHeight: maxHeight)
+        }
+    }
+}
+
+/// Offers its content at most `maxHeight` and takes the height the content asks for, where
+/// `.frame(maxHeight:)` takes all it is offered and leaves a short content floating in the middle.
+private struct HeightCap: Layout {
+    let maxHeight: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let capped = ProposedViewSize(width: proposal.width,
+                                      height: min(proposal.height ?? maxHeight, maxHeight))
+        return subviews.first?.sizeThatFits(capped) ?? .zero
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading, proposal: ProposedViewSize(bounds.size))
     }
 }
 

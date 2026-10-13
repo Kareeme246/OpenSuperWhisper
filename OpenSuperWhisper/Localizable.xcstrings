@@ -11441,16 +11441,6 @@
         }
       }
     },
-    "A quick form on opensuperwhisper.com, no account needed.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un court formulaire sur opensuperwhisper.com, sans compte."
-          }
-        }
-      }
-    },
     "A site rule only picks the transcription model, in Safari, Arc and other supported browsers. Insertion and formatting follow the app.": {
       "localizations": {
         "fr": {
@@ -12611,6 +12601,16 @@
         }
       }
     },
+    "Couldn't send it. Check your connection and try again.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoi impossible. Vérifiez votre connexion et réessayez."
+          }
+        }
+      }
+    },
     "Current model": {
       "localizations": {
         "fr": {
@@ -12967,6 +12967,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Modifier l'entrée"
+          }
+        }
+      }
+    },
+    "Email (optional, if you'd like an answer)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E-mail (facultatif, si vous voulez une réponse)"
           }
         }
       }
@@ -13671,6 +13681,16 @@
         }
       }
     },
+    "Include app details": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Joindre les infos de l'app"
+          }
+        }
+      }
+    },
     "Input Monitoring": {
       "localizations": {
         "fr": {
@@ -14037,6 +14057,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rechercher avec une expression régulière et utiliser $1, $2… dans le résultat."
+          }
+        }
+      }
+    },
+    "Message": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message"
           }
         }
       }
@@ -14491,6 +14521,16 @@
         }
       }
     },
+    "Nothing else is sent: no dictations, audio, logs or settings.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rien d'autre n'est envoyé : ni dictées, ni audio, ni journaux, ni réglages."
+          }
+        }
+      }
+    },
     "Nothing here yet. Add a name you say often, or a word the model keeps getting wrong.": {
       "localizations": {
         "fr": {
@@ -14651,16 +14691,6 @@
         }
       }
     },
-    "On GitHub. Steps to reproduce, your macOS version and engine, logs if you have them.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sur GitHub. Étapes pour reproduire, votre version de macOS et votre moteur, les journaux si vous les avez."
-          }
-        }
-      }
-    },
     "On this Mac": {
       "localizations": {
         "fr": {
@@ -14817,6 +14847,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ouvrir les Réglages Système"
+          }
+        }
+      }
+    },
+    "Only used to answer you": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seulement pour vous répondre"
+          }
+        }
+      }
+    },
+    "Open an issue": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir un ticket"
+          }
+        }
+      }
+    },
+    "Open an issue on GitHub": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir un ticket sur GitHub"
           }
         }
       }
@@ -15207,6 +15267,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Action après enregistrement"
+          }
+        }
+      }
+    },
+    "Prefer GitHub?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous préférez GitHub ?"
           }
         }
       }
@@ -15661,12 +15731,22 @@
         }
       }
     },
-    "Report a bug, send an idea, or try a beta build": {
+    "Report a bug or share an idea, right here. No account needed.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Signaler un bug, envoyer une idée ou essayer une version bêta"
+            "value": "Signaler un bug ou proposer une idée, directement ici. Sans compte."
+          }
+        }
+      }
+    },
+    "Report a bug or share an idea, without leaving the app": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signaler un bug ou proposer une idée, sans quitter l'app"
           }
         }
       }
@@ -15901,12 +15981,32 @@
         }
       }
     },
-    "Send feedback or an idea": {
+    "Send": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Envoyer un retour ou une idée"
+            "value": "Envoyer"
+          }
+        }
+      }
+    },
+    "Send feedback": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyer un retour"
+          }
+        }
+      }
+    },
+    "Sending…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoi…"
           }
         }
       }
@@ -16007,6 +16107,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Plusieurs variantes peuvent pointer vers le même mot. Entrée pour ajouter. \\n = saut de ligne."
+          }
+        }
+      }
+    },
+    "Share an idea": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proposer une idée"
           }
         }
       }
@@ -16321,6 +16431,16 @@
         }
       }
     },
+    "Steps to reproduce, your macOS version and engine, logs if you have them.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Étapes pour reproduire, votre version de macOS et votre moteur, les journaux si vous les avez."
+          }
+        }
+      }
+    },
     "Stop": {
       "localizations": {
         "fr": {
@@ -16541,6 +16661,16 @@
         }
       }
     },
+    "Tell us what went wrong or what you'd like. It goes straight to the team.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dites-nous ce qui n'a pas marché ou ce que vous aimeriez. Ça arrive directement à l'équipe."
+          }
+        }
+      }
+    },
     "Temperature": {
       "localizations": {
         "fr": {
@@ -16587,6 +16717,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Texte autour du curseur"
+          }
+        }
+      }
+    },
+    "Thanks! It reached us. 🍌": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merci ! C'est bien arrivé. 🍌"
           }
         }
       }
@@ -17271,6 +17411,16 @@
         }
       }
     },
+    "We read every message. If you left an email, the answer will come there.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nous lisons chaque message. Si vous avez laissé un e-mail, la réponse arrivera là."
+          }
+        }
+      }
+    },
     "What OpenSuperWhisper keeps on your Mac, and for how long.": {
       "localizations": {
         "fr": {
@@ -17281,12 +17431,32 @@
         }
       }
     },
+    "What happened, and what did you expect?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que s'est-il passé, et qu'attendiez-vous ?"
+          }
+        }
+      }
+    },
     "What happens to the text between your voice and the app: cleanup, formatting, insertion.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Ce qui arrive au texte entre votre voix et l'app : nettoyage, mise en forme, insertion."
+          }
+        }
+      }
+    },
+    "What would make OpenSuperWhisper better for you?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qu'est-ce qui rendrait OpenSuperWhisper meilleur pour vous ?"
           }
         }
       }

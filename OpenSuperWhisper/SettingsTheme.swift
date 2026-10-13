@@ -116,15 +116,30 @@ struct SPaneStack: Layout {
     }
 }
 
-/// Themed multiline editor (regex, prompts, per-app instructions).
+/// Themed multiline editor (regex, prompts, per-app instructions, the feedback message).
 struct SEditor: View {
     @Binding var text: String
     let height: CGFloat
+    var fontSize: CGFloat = 11.5
+    var monospaced = true
+    /// Shown while the text is empty; TextEditor has no prompt of its own.
+    var placeholder: LocalizedStringKey?
 
     var body: some View {
         TextEditor(text: $text)
-            .scaledFont(size: 11.5, design: .monospaced)
+            .scaledFont(size: fontSize, design: monospaced ? .monospaced : .default)
             .scrollContentBackground(.hidden)
+            .overlay(alignment: .topLeading) {
+                if let placeholder, text.isEmpty {
+                    // Inset by the text view's own line-fragment padding, so it sits where typing starts.
+                    Text(placeholder)
+                        .scaledFont(size: fontSize, design: monospaced ? .monospaced : .default)
+                        .foregroundColor(STheme.faint)
+                        .padding(.leading, 5)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
             .padding(6)
             .frame(height: height)
             .background(RoundedRectangle(cornerRadius: 7).fill(STheme.inputBg))
