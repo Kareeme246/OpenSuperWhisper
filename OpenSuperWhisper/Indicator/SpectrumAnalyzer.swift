@@ -191,7 +191,13 @@ final class SpectrumAnalyzer: ObservableObject {
 
         do {
             try ObjCExceptionError.catching { engine.prepare() }
-            try engine.start()
+            // A device pinned after the input node exists can still disagree on format at start,
+            // which AVAudioEngine reports as an Objective-C exception rather than a Swift error.
+            var startError: Error?
+            try ObjCExceptionError.catching {
+                do { try engine.start() } catch { startError = error }
+            }
+            if let startError { throw startError }
         } catch {
             input.removeTap(onBus: 0)
             print("SpectrumAnalyzer: couldn't start the audio engine: \(error)")

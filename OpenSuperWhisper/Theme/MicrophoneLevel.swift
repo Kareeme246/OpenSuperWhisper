@@ -110,6 +110,8 @@ private struct InputLevelMonitoring: ViewModifier {
     /// A Settings pane left open behind another app would otherwise keep the microphone (and
     /// its menu bar indicator) on with nobody looking.
     @State private var appIsActive = NSApplication.shared.isActive
+    /// A minimised window fires no onDisappear, and the app often stays active.
+    @State private var windowIsVisible = true
 
     func body(content: Content) -> some View {
         content
@@ -129,6 +131,19 @@ private struct InputLevelMonitoring: ViewModifier {
                 appIsActive = false
                 update()
             }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)) { note in
+                guard let window = note.object as? NSWindow, window === NSApp.mainWindow || window.isKeyWindow else { return }
+                windowIsVisible = window.occlusionState.contains(.visible) && !window.isMiniaturized
+                update()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didMiniaturizeNotification)) { _ in
+                windowIsVisible = false
+                update()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didDeminiaturizeNotification)) { _ in
+                windowIsVisible = true
+                update()
+            }
             .onChange(of: microphone?.id) { _, _ in
                 if let token { SpectrumAnalyzer.shared.retarget(token, device: deviceID) }
             }
@@ -139,7 +154,7 @@ private struct InputLevelMonitoring: ViewModifier {
     }
 
     private func update() {
-        let wanted = isOnScreen && appIsActive
+        let wanted = isOnScreen && appIsActive && windowIsVisible
         if wanted, token == nil {
             token = SpectrumAnalyzer.shared.beginMonitoring(device: deviceID)
         } else if !wanted, let held = token {
