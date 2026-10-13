@@ -8,8 +8,6 @@ struct HelpOverlay: View {
     @ObservedObject private var navigation = AppNavigation.shared
     @StateObject private var updates = ReleaseNotesModel()
 
-    private static let repository = "https://github.com/my-monkeys/OpenSuperWhisper"
-
     var body: some View {
         ModalCard(maxWidth: 760, onClose: close) {
             VStack(alignment: .leading, spacing: 0) {
@@ -90,18 +88,9 @@ struct HelpOverlay: View {
 
     private var feedbackGroup: some View {
         SettingsGroup("Feedback", subtitle: "Every report makes the app more stable.") {
-            HelpLinkRow(title: "Report a bug",
-                        subtitle: "On GitHub. Steps to reproduce, your macOS version and engine, logs if you have them.",
-                        symbol: "ladybug",
-                        url: "\(Self.repository)/issues/new")
-            HelpLinkRow(title: "Send feedback or an idea",
-                        subtitle: "A quick form on opensuperwhisper.com, no account needed.",
-                        symbol: "bubble.left.and.bubble.right",
-                        url: "https://opensuperwhisper.com/#feedback")
-            HelpLinkRow(title: "Try a beta build",
-                        subtitle: "Early features before they ship, on GitHub Releases.",
-                        symbol: "testtube.2",
-                        url: "\(Self.repository)/releases")
+            ForEach(FeedbackLink.all) { link in
+                HelpLinkRow(title: link.title, subtitle: link.subtitle, symbol: link.symbol, url: link.url)
+            }
         }
     }
 
@@ -110,11 +99,11 @@ struct HelpOverlay: View {
             HelpLinkRow(title: "Support us",
                         subtitle: "OpenSuperWhisper is free and open source. A coffee on Ko-fi keeps it going.",
                         symbol: "heart",
-                        url: "https://ko-fi.com/mymonkey")
+                        url: URL(string: "https://ko-fi.com/mymonkey")!)
             HelpLinkRow(title: "Source code on GitHub",
                         subtitle: "Version \(UpdateChecker.currentVersion). Star it, read it, open a pull request.",
                         symbol: "chevron.left.forwardslash.chevron.right",
-                        url: Self.repository)
+                        url: FeedbackLink.repository)
         }
     }
 
@@ -138,11 +127,11 @@ private struct HelpLinkRow: View {
     let title: LocalizedStringKey
     let subtitle: LocalizedStringKey
     let symbol: String
-    let url: String
+    let url: URL
 
     var body: some View {
         Button {
-            if let target = URL(string: url) { NSWorkspace.shared.open(target) }
+            NSWorkspace.shared.open(url)
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: symbol)
