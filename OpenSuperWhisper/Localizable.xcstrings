@@ -17910,6 +17910,126 @@
           }
         }
       }
+    },
+    "Input level": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niveau d'entrée"
+          }
+        }
+      }
+    },
+    "Speak to test your microphone.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parlez pour tester votre micro."
+          }
+        }
+      }
+    },
+    "Very quiet. Move closer or pick another microphone.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Très faible. Rapprochez-vous ou choisissez un autre micro."
+          }
+        }
+      }
+    },
+    "Too quiet": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop faible"
+          }
+        }
+      }
+    },
+    "Low": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faible"
+          }
+        }
+      }
+    },
+    "Good": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bon"
+          }
+        }
+      }
+    },
+    "Input volume": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume d'entrée"
+          }
+        }
+      }
+    },
+    "Open Sound settings": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir les réglages Son"
+          }
+        }
+      }
+    },
+    "Set to maximum": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre au maximum"
+          }
+        }
+      }
+    },
+    "Set input volume to maximum": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre le volume d'entrée au maximum"
+          }
+        }
+      }
+    },
+    "The same setting as in System Settings → Sound.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le même réglage que dans Réglages Système → Son."
+          }
+        }
+      }
+    },
+    "This microphone's volume can't be changed from the app. Check it in Sound settings.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le volume de ce micro ne se règle pas depuis l'app. Vérifiez-le dans les réglages Son."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
