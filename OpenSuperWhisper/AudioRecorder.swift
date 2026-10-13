@@ -281,7 +281,7 @@ class AudioRecorder: NSObject, ObservableObject {
                 audioRecorder?.isMeteringEnabled = monitorConnection
                 audioRecorder?.record()
             }
-            Task { @MainActor in SpectrumAnalyzer.shared.start() }
+            Task { @MainActor in SpectrumAnalyzer.shared.beginTake() }
             if monitorConnection {
                 startConnectionMonitoring()
             } else {
@@ -339,7 +339,7 @@ class AudioRecorder: NSObject, ObservableObject {
         endRecordingActivity()
 
         updateRecordingState(isRecording: false, isConnecting: false)
-        Task { @MainActor in SpectrumAnalyzer.shared.stop() }
+        Task { @MainActor in SpectrumAnalyzer.shared.endTake() }
         stopConnectionMonitoring()
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.primeAudioHardware()  // re-prime so the next recording starts instantly too
@@ -384,7 +384,7 @@ class AudioRecorder: NSObject, ObservableObject {
         Diag.measure("AVAudioRecorder.stop (cancel)") { audioRecorder?.stop() }
         endRecordingActivity()
         updateRecordingState(isRecording: false, isConnecting: false)
-        Task { @MainActor in SpectrumAnalyzer.shared.stop() }
+        Task { @MainActor in SpectrumAnalyzer.shared.endTake() }
         stopConnectionMonitoring()
 
         if AppPreferences.shared.pauseMediaOnRecord {
@@ -524,7 +524,7 @@ extension AudioRecorder: AVAudioRecorderDelegate {
         updateRecordingState(isRecording: false, isConnecting: false)
 
         Task { @MainActor in
-            SpectrumAnalyzer.shared.stop()
+            SpectrumAnalyzer.shared.endTake()
             // Said out loud rather than left to be noticed. A take that captured nothing is
             // otherwise indistinguishable from one the user simply has not finished (#117).
             IndicatorWindowManager.shared.reportRecordingFailure("Recording stopped: the microphone dropped out")
