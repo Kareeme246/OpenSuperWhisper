@@ -28,6 +28,18 @@ enum UISnapshotProbe {
             return AnyView(AppShellView(page: .home, settings: .models))
         },
         "help": { AppNavigation.shared.helpOpen = true; return AnyView(AppShellView(page: .home)) },
+        "mic-picker": { microphonePicker(verdict: .normal) },
+        "mic-picker-quiet": { microphonePicker(verdict: .tooQuiet) },
+        "mic-picker-large-text": {
+            AppPreferences.shared.textScale = TextScale.maximum
+            return microphonePicker(verdict: .tooQuiet)
+        },
+        "settings-dictation-level": { microphoneSettings(verdict: .normal) },
+        "settings-dictation-level-quiet": { microphoneSettings(verdict: .tooQuiet) },
+        "settings-dictation-level-large-text": {
+            AppPreferences.shared.textScale = TextScale.maximum
+            return microphoneSettings(verdict: .tooQuiet)
+        },
         "onboarding": { AnyView(OnboardingView().environmentObject(AppState())) },
         "onboarding-2": { AnyView(OnboardingView(initialStep: .model).environmentObject(AppState())) },
         "onboarding-3": { AnyView(OnboardingView(initialStep: .permissions).environmentObject(AppState())) },
@@ -55,6 +67,41 @@ enum UISnapshotProbe {
         "agent-panel-permission": { AgentPanelSnapshot.make(showing: .permission) },
         "agent-panel-question": { AgentPanelSnapshot.make(showing: .question) },
     ]
+
+    /// The Home microphone popover, drawn as a card over Home: an off-screen window cannot show a
+    /// real popover. Levels are staged, so no microphone is opened.
+    private static func microphonePicker(verdict: QuietInput.Verdict) -> AnyView {
+        seedMicrophones(verdict: verdict)
+        let card = MicrophonePickerList(microphoneService: MicrophoneService.shared)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(STheme.cardBg))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(STheme.border, lineWidth: 1))
+            .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+            // A real popover inherits the window's text size; this card sits outside the shell.
+            .environment(\.appTextScale, AppPreferences.shared.textScale)
+        return AnyView(AppShellView(page: .home).overlay(alignment: .topTrailing) {
+            card.padding(.top, 150).padding(.trailing, 60)
+        })
+    }
+
+    private static func microphoneSettings(verdict: QuietInput.Verdict) -> AnyView {
+        seedMicrophones(verdict: verdict)
+        return scrolled(.dictation, to: "Microphone")
+    }
+
+    /// Two made-up microphones, set directly so nothing is saved to preferences.
+    private static func seedMicrophones(verdict: QuietInput.Verdict) {
+        let builtIn = MicrophoneService.AudioDevice(id: "probe-built-in", name: "MacBook Pro Microphone",
+                                                    manufacturer: "Apple Inc.", isBuiltIn: true)
+        let usb = MicrophoneService.AudioDevice(id: "probe-usb", name: "Shure MV7",
+                                                manufacturer: "Shure", isBuiltIn: false)
+        let service = MicrophoneService.shared
+        service.availableMicrophones = [builtIn, usb]
+        service.selectedMicrophone = builtIn
+        service.currentMicrophone = builtIn
+        let speaking: [Float] = [0.42, 0.78, 0.9, 0.66, 0.5, 0.34, 0.2]
+        let murmur: [Float] = [0.08, 0.12, 0.1, 0.06, 0.05, 0.03, 0.02]
+        SpectrumAnalyzer.shared.stageBands(verdict == .tooQuiet ? murmur : speaking, verdict: verdict)
+    }
 
     /// A rubric with Advanced on, scrolled to one of its rows, for the parts below the fold.
     private static func scrolled(_ rubric: SettingsRubric, to row: String) -> AnyView {
