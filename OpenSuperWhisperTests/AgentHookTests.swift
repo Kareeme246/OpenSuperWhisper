@@ -110,6 +110,76 @@ final class AgentHookTests: XCTestCase {
         XCTAssertNotNil(updated["questions"], "the whole input goes back, not only the answers")
     }
 
+    /// What Claude Code sends for AskUserQuestion, as recorded from a real session: the same
+    /// tool input reaches the PreToolUse hook and, when that one prints nothing, PermissionRequest.
+    private func askUserQuestionHook(_ event: String, input: [String: Any]) -> [String: Any] {
+        var json: [String: Any] = [
+            "session_id": "7d6e9f94-52f7-4ead-ad7a-75bbf7f014ba",
+            "transcript_path": "/nonexistent/7d6e9f94.jsonl",
+            "cwd": "/Users/me/code/topchef", "permission_mode": "default",
+            "hook_event_name": event, "tool_name": "AskUserQuestion", "tool_input": input,
+        ]
+        if event == "PreToolUse" { json["tool_use_id"] = "toolu_01P15ACyJWZQfNtvpHZFAbPn" }
+        return json
+    }
+
+    private let realQuestionInput: [String: Any] = [
+        "questions": [[
+            "question": "Le titre de la partie, on le garde où ?", "header": "Indice", "multiSelect": false,
+            "options": [["label": "Nulle part sur l'Accueil (Recommandé)", "description": "Seulement le nom du jeu."],
+                        ["label": "Sous le nom, certains jeux", "description": "Tu me dis lesquels."]],
+        ]],
+    ]
+
+    func testARealPreToolUsePayloadMakesAQuestionCard() {
+        let request = AgentHookCommand.makeQuestionRequest(from: askUserQuestionHook("PreToolUse", input: realQuestionInput))
+        XCTAssertEqual(request?.kind, .question)
+        XCTAssertEqual(request?.questions?.first?.options.map(\.label),
+                       ["Nulle part sur l'Accueil (Recommandé)", "Sous le nom, certains jeux"])
+        XCTAssertNil(request?.toolDetail)
+    }
+
+    /// The bug: once the question card had timed out, the permission for the same question
+    /// showed its input as a JSON array, and allowing it would have refused the question.
+    func testAskUserQuestionIsNeverTurnedIntoAPermissionCard() {
+        XCTAssertNil(AgentHookCommand.makePermissionRequest(
+            from: askUserQuestionHook("PermissionRequest", input: realQuestionInput)))
+        XCTAssertNotNil(AgentHookCommand.makePermissionRequest(
+            from: ["session_id": "s", "cwd": "/p", "tool_name": "Bash", "tool_input": ["command": "ls"]]),
+            "other tools still ask")
+    }
+
+    private var stringifiedQuestionInput: [String: Any] {
+        let options = #"[{"label":"main","description":"Ship it"},{"label":"dev"}]"#
+        let questions = try! JSONSerialization.data(withJSONObject: [
+            ["question": "Which branch?", "header": "Branch", "multiSelect": false, "options": options],
+        ])
+        return ["questions": String(decoding: questions, as: UTF8.self)]
+    }
+
+    func testQuestionsSentAsJSONTextStillMakeAQuestionCard() {
+        let request = AgentHookCommand.makeQuestionRequest(
+            from: askUserQuestionHook("PreToolUse", input: stringifiedQuestionInput))
+        XCTAssertEqual(request?.questions?.first?.question, "Which branch?")
+        XCTAssertEqual(request?.questions?.first?.options.map(\.label), ["main", "dev"])
+        XCTAssertEqual(request?.questions?.first?.options.first?.description, "Ship it")
+    }
+
+    func testQuestionsSentAsJSONTextGoBackAsLists() throws {
+        let data = try XCTUnwrap(AgentHookCommand.questionHookOutput(
+            for: AgentResponse(action: .answer, answers: ["Which branch?": "dev"]), toolInput: stringifiedQuestionInput))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let updated = try XCTUnwrap((json["hookSpecificOutput"] as? [String: Any])?["updatedInput"] as? [String: Any])
+        let questions = try XCTUnwrap(updated["questions"] as? [[String: Any]])
+        XCTAssertEqual((questions.first?["options"] as? [[String: Any]])?.count, 2)
+        XCTAssertEqual(updated["answers"] as? [String: String], ["Which branch?": "dev"])
+    }
+
+    func testTextThatIsNotAQuestionListMakesNoRequest() {
+        XCTAssertNil(AgentHookCommand.makeQuestionRequest(
+            from: askUserQuestionHook("PreToolUse", input: ["questions": "Which branch?"])))
+    }
+
     // MARK: Spoken answers
 
     func testSpokenVerdicts() {
