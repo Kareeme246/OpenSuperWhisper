@@ -114,10 +114,16 @@ struct MicrophoneLevelCaption: View {
     }
 }
 
-/// Top of the Home microphone popover: the level of the microphone that is checked below it.
+/// Top of the Home microphone popover: the level and the input volume of the microphone that is
+/// checked below it.
 struct MicrophoneLevelSection: View {
     let microphone: MicrophoneService.AudioDevice?
     @ObservedObject private var monitor = InputLevelMonitor.shared
+    @ObservedObject private var volume = InputVolumeModel.shared
+
+    private var remedy: QuietInputRemedy {
+        QuietInputRemedy(verdict: monitor.reading.verdict, volume: volume.volume, isSettable: volume.isSettable)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -126,18 +132,23 @@ struct MicrophoneLevelSection: View {
                 .foregroundColor(STheme.hint)
             MicrophoneLevelMeter(reading: monitor.reading)
             MicrophoneLevelCaption(verdict: monitor.reading.verdict)
+            QuietInputRemedyLink(remedy: remedy, model: volume)
+            MicrophoneVolumeSection(model: volume, remedy: remedy)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .monitorsInputLevel(of: microphone)
+        .followsInputVolume(of: microphone)
     }
 }
 
-/// Settings › Dictation, under the Microphone row.
+/// Settings › Dictation, under the Microphone row: the level, the input volume, and the warning
+/// when the level stays too quiet.
 struct MicrophoneLevelRow: View {
     let microphone: MicrophoneService.AudioDevice?
     @ObservedObject private var monitor = InputLevelMonitor.shared
+    @ObservedObject private var volume = InputVolumeModel.shared
 
     private static let barWidth: CGFloat = 200
 
@@ -147,15 +158,32 @@ struct MicrophoneLevelRow: View {
                 .frame(width: Self.barWidth)
         }
         .monitorsInputLevel(of: microphone)
+        MicrophoneVolumeRow(model: volume)
+            .followsInputVolume(of: microphone)
         if monitor.reading.verdict == .tooQuiet {
-            MicrophoneLevelCaption(verdict: .tooQuiet)
-                .padding(.leading, 34)
-                .padding(.trailing, 16)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(STheme.warnBg)
-                .overlay(alignment: .top) { Rectangle().fill(STheme.border).frame(height: 1) }
+            quietWarning
         }
+    }
+
+    /// Sound settings is already one row up when the volume cannot be set here, so the warning
+    /// only adds the one-click fix.
+    private var quietWarning: some View {
+        let remedy = QuietInputRemedy(verdict: .tooQuiet, volume: volume.volume, isSettable: volume.isSettable)
+        return HStack(spacing: 16) {
+            MicrophoneLevelCaption(verdict: .tooQuiet)
+                .layoutPriority(1)
+            Spacer(minLength: 0)
+            if remedy == .setToMaximum {
+                Button("Set to maximum", action: volume.setToMaximum)
+                    .buttonStyle(.sSecondary)
+            }
+        }
+        .padding(.leading, 34)
+        .padding(.trailing, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(STheme.warnBg)
+        .overlay(alignment: .top) { Rectangle().fill(STheme.border).frame(height: 1) }
     }
 }
 

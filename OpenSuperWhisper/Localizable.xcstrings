@@ -17970,6 +17970,56 @@
           }
         }
       }
+    },
+    "Input volume": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume d'entrée"
+          }
+        }
+      }
+    },
+    "Open Sound settings": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir les réglages Son"
+          }
+        }
+      }
+    },
+    "Set to maximum": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre au maximum"
+          }
+        }
+      }
+    },
+    "The same setting as in System Settings › Sound.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le même réglage que dans Réglages Système › Son."
+          }
+        }
+      }
+    },
+    "macOS doesn't let apps change this microphone's volume. Check it in Sound settings.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS ne laisse pas les apps régler le volume de ce micro. Vérifiez-le dans les réglages Son."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
