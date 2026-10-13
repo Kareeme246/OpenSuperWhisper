@@ -58,6 +58,7 @@ load: /usr/lib/swift/libswiftCoreGraphics.dylib
 load: /usr/lib/swift/libswiftCoreImage.dylib
 load: /usr/lib/swift/libswiftCoreMIDI.dylib
 load: /usr/lib/swift/libswiftCoreML.dylib
+load: /usr/lib/swift/libswiftCoreMedia.dylib
 load: /usr/lib/swift/libswiftDarwin.dylib
 load: /usr/lib/swift/libswiftDispatch.dylib
 load: /usr/lib/swift/libswiftIOKit.dylib
