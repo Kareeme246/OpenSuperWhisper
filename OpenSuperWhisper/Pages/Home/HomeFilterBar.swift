@@ -97,14 +97,6 @@ struct MicrophonePickerIconView: View {
     @ObservedObject var microphoneService: MicrophoneService
     @State private var showMenu = false
 
-    private var builtInMicrophones: [MicrophoneService.AudioDevice] {
-        microphoneService.availableMicrophones.filter { $0.isBuiltIn }
-    }
-
-    private var externalMicrophones: [MicrophoneService.AudioDevice] {
-        microphoneService.availableMicrophones.filter { !$0.isBuiltIn }
-    }
-
     var body: some View {
         Button {
             showMenu.toggle()
@@ -114,29 +106,50 @@ struct MicrophonePickerIconView: View {
         .buttonStyle(.plain)
         .help(microphoneService.currentMicrophone?.displayName ?? String(localized: "Select microphone"))
         .popover(isPresented: $showMenu, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 0) {
-                if microphoneService.availableMicrophones.isEmpty {
-                    Text("No microphones available")
-                        .scaledFont(size: 13)
-                        .foregroundColor(STheme.hint)
-                        .padding()
-                } else {
-                    ForEach(builtInMicrophones) { microphoneRow($0) }
-                    if !builtInMicrophones.isEmpty && !externalMicrophones.isEmpty {
-                        Divider().padding(.vertical, 4)
-                    }
-                    ForEach(externalMicrophones) { microphoneRow($0) }
-                }
-            }
-            .frame(minWidth: 220)
-            .padding(.vertical, 8)
+            MicrophonePickerList(microphoneService: microphoneService)
         }
+    }
+}
+
+/// The popover's content: the input level of the microphone in use, then every microphone.
+///
+/// Picking one keeps the popover open, so the level can be compared from one microphone to the
+/// next without reopening it each time.
+struct MicrophonePickerList: View {
+    @ObservedObject var microphoneService: MicrophoneService
+
+    private var builtInMicrophones: [MicrophoneService.AudioDevice] {
+        microphoneService.availableMicrophones.filter { $0.isBuiltIn }
+    }
+
+    private var externalMicrophones: [MicrophoneService.AudioDevice] {
+        microphoneService.availableMicrophones.filter { !$0.isBuiltIn }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if microphoneService.availableMicrophones.isEmpty {
+                Text("No microphones available")
+                    .scaledFont(size: 13)
+                    .foregroundColor(STheme.hint)
+                    .padding()
+            } else {
+                MicrophoneLevelSection(microphone: microphoneService.currentMicrophone)
+                Divider().padding(.vertical, 6)
+                ForEach(builtInMicrophones) { microphoneRow($0) }
+                if !builtInMicrophones.isEmpty && !externalMicrophones.isEmpty {
+                    Divider().padding(.vertical, 4)
+                }
+                ForEach(externalMicrophones) { microphoneRow($0) }
+            }
+        }
+        .frame(minWidth: 260, maxWidth: 320)
+        .padding(.vertical, 8)
     }
 
     private func microphoneRow(_ microphone: MicrophoneService.AudioDevice) -> some View {
         Button {
             microphoneService.selectMicrophone(microphone)
-            showMenu = false
         } label: {
             HStack {
                 Text(microphone.displayName)

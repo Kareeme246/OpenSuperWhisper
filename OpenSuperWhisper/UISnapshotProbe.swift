@@ -28,6 +28,32 @@ enum UISnapshotProbe {
             return AnyView(AppShellView(page: .home, settings: .models))
         },
         "help": { AppNavigation.shared.helpOpen = true; return AnyView(AppShellView(page: .home)) },
+        "feedback-form": { feedbackCard() },
+        "feedback-form-bug": { feedbackCard(stagedBug: true) },
+        "feedback-form-bug-large-text": {
+            AppPreferences.shared.textScale = TextScale.maximum
+            return feedbackCard(stagedBug: true)
+        },
+        "feedback-form-too-long": { feedbackCard(message: String(repeating: "Log line: dictation stopped. ", count: 140)) },
+        "feedback-sent": { feedbackCard(status: .sent) },
+        "mic-picker": { microphonePicker(.speaking) },
+        "mic-picker-low": { microphonePicker(.murmuring) },
+        "mic-picker-quiet": { microphonePicker(.tooQuiet) },
+        "mic-picker-large-text": {
+            AppPreferences.shared.textScale = TextScale.maximum
+            return microphonePicker(.tooQuiet)
+        },
+        "settings-dictation-level": { microphoneSettings(.speaking) },
+        "settings-dictation-level-low": { microphoneSettings(.murmuring) },
+        "settings-dictation-level-quiet": { microphoneSettings(.tooQuiet) },
+        "settings-dictation-level-large-text": {
+            AppPreferences.shared.textScale = TextScale.maximum
+            // Lower than the others: at this size the quiet band falls below the fold.
+            return microphoneSettings(.tooQuiet, scrolledTo: "Input volume")
+        },
+        "mic-picker-fixed-volume": { microphonePicker(.speaking, volume: .fixed) },
+        "mic-picker-fixed-volume-quiet": { microphonePicker(.tooQuiet, volume: .fixed) },
+        "settings-dictation-fixed-volume": { microphoneSettings(.tooQuiet, volume: .fixed) },
         "onboarding": { AnyView(OnboardingView().environmentObject(AppState())) },
         "onboarding-2": { AnyView(OnboardingView(initialStep: .model).environmentObject(AppState())) },
         "onboarding-3": { AnyView(OnboardingView(initialStep: .permissions).environmentObject(AppState())) },
@@ -64,12 +90,88 @@ enum UISnapshotProbe {
         },
     ]
 
+    /// Levels staged in each of the bar's zones: green, orange, and red with the warning.
+    private enum StagedLevel {
+        case speaking, murmuring, tooQuiet
+
+        var reading: InputLevelReading {
+            switch self {
+            case .speaking: return InputLevelReading(levelDBFS: -24, peakDBFS: -19, verdict: .normal)
+            case .murmuring: return InputLevelReading(levelDBFS: -44, peakDBFS: -39, verdict: .normal)
+            case .tooQuiet: return InputLevelReading(levelDBFS: -57, peakDBFS: -53, verdict: .tooQuiet)
+            }
+        }
+    }
+
+    /// The built-in microphone's own volume as found on the Mac that prompted the slider, or one
+    /// macOS keeps to itself, as on many USB microphones.
+    private enum StagedVolume {
+        case settable, fixed
+    }
+
+    /// The Home microphone popover, drawn as a card over Home: an off-screen window cannot show a
+    /// real popover. Levels and volumes are staged, so no microphone is opened or changed.
+    private static func microphonePicker(_ level: StagedLevel, volume: StagedVolume = .settable) -> AnyView {
+        seedMicrophones(level, volume: volume)
+        let card = MicrophonePickerList(microphoneService: MicrophoneService.shared)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(STheme.cardBg))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(STheme.border, lineWidth: 1))
+            .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+            // A real popover inherits the window's text size; this card sits outside the shell.
+            .environment(\.appTextScale, AppPreferences.shared.textScale)
+        return AnyView(AppShellView(page: .home).overlay(alignment: .topTrailing) {
+            card.padding(.top, 150).padding(.trailing, 60)
+        })
+    }
+
+    private static func microphoneSettings(_ level: StagedLevel, volume: StagedVolume = .settable,
+                                           scrolledTo row: String = "Microphone") -> AnyView {
+        seedMicrophones(level, volume: volume)
+        return scrolled(.dictation, to: row)
+    }
+
+    /// Two made-up microphones, set directly so nothing is saved to preferences.
+    private static func seedMicrophones(_ level: StagedLevel, volume: StagedVolume) {
+        let builtIn = MicrophoneService.AudioDevice(id: "probe-built-in", name: "MacBook Pro Microphone",
+                                                    manufacturer: "Apple Inc.", isBuiltIn: true)
+        let usb = MicrophoneService.AudioDevice(id: "probe-usb", name: "Shure MV7",
+                                                manufacturer: "Shure", isBuiltIn: false)
+        let service = MicrophoneService.shared
+        service.availableMicrophones = [builtIn, usb]
+        service.selectedMicrophone = builtIn
+        service.currentMicrophone = builtIn
+        InputLevelMonitor.shared.stage(level.reading)
+        switch volume {
+        case .settable: InputVolumeModel.shared.stage(volume: 0.38, isSettable: true)
+        case .fixed: InputVolumeModel.shared.stage(volume: nil, isSettable: false)
+        }
+    }
+
     /// A rubric with Advanced on, scrolled to one of its rows, for the parts below the fold.
     private static func scrolled(_ rubric: SettingsRubric, to row: String) -> AnyView {
         AdvancedRubrics.shared.set(rubric.rawValue, true)
         let view = AnyView(AppShellView(page: .home, settings: rubric))
         AppNavigation.shared.settingsFocusRow = row
         return view
+    }
+
+    /// Home with the Feedback card open on a staged draft. Its sender fails without a request
+    /// ever being made: the endpoint notifies the owner, and a snapshot is never meant to.
+    private static func feedbackCard(stagedBug: Bool = false, message: String? = nil,
+                                     status: FeedbackFormModel.Status = .editing) -> AnyView {
+        let model = FeedbackFormModel(sender: FeedbackSender(transport: { _ in throw URLError(.cancelled) }))
+        if let message {
+            model.kind = .bug
+            model.message = message
+        }
+        if stagedBug {
+            model.kind = .bug
+            model.message = "The bubble stays on screen after I stop dictating in Mail. It goes away once I click elsewhere."
+            model.email = "camille@example.com"
+        }
+        model.stageStatus(status)
+        AppNavigation.shared.feedbackOpen = true
+        return AnyView(AppShellView(page: .home, feedback: model))
     }
 
     static func run(outputDir: String, names: [String]) -> Never {
@@ -114,6 +216,9 @@ enum UISnapshotProbe {
             }
             for dark in [false, true] {
                 AppNavigation.shared.helpOpen = false
+                AppNavigation.shared.feedbackOpen = false
+                // A large-text screen would otherwise leave every later screen of the run large.
+                AppPreferences.shared.textScale = TextScale.default
                 let view = make()
                 let file = dir.appendingPathComponent("\(name)-\(dark ? "dark" : "light").png")
                 render(view, size: size, dark: dark, to: file)

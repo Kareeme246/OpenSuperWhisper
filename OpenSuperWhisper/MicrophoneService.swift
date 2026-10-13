@@ -261,6 +261,13 @@ class MicrophoneService: ObservableObject {
         return false
     }
     
+    /// The CoreAudio transport type rather than `AudioDevice.isBuiltIn`: that guess counts every
+    /// Apple-made device as built in, aggregate devices from Audio MIDI Setup included, and an
+    /// aggregate of several interfaces is exactly the case that has to keep all its channels.
+    func hasBuiltInTransport(_ device: AudioDevice) -> Bool {
+        getTransportType(for: device) == Int32(bitPattern: kAudioDeviceTransportTypeBuiltIn)
+    }
+
     private func getTransportType(for device: AudioDevice) -> Int32 {
         guard let deviceID = getCoreAudioDeviceID(for: device) else { return 0 }
         
@@ -355,7 +362,11 @@ class MicrophoneService: ObservableObject {
     }
 
     func getCoreAudioDeviceID(for device: AudioDevice) -> AudioDeviceID? {
-        var deviceID = device.id as CFString
+        getCoreAudioDeviceID(forUID: device.id)
+    }
+
+    func getCoreAudioDeviceID(forUID uid: String) -> AudioDeviceID? {
+        var deviceID = uid as CFString
         var audioDeviceID = AudioDeviceID()
         var propertySize = UInt32(MemoryLayout<AudioDeviceID>.size)
         
@@ -519,7 +530,10 @@ class MicrophoneService: ObservableObject {
     
     func getInputChannelCount(for device: AudioDevice) -> Int {
         guard let deviceID = getCoreAudioDeviceID(for: device) else { return 1 }
-        
+        return getInputChannelCount(for: deviceID)
+    }
+
+    func getInputChannelCount(for deviceID: AudioDeviceID) -> Int {
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyStreamConfiguration,
             mScope: kAudioDevicePropertyScopeInput,

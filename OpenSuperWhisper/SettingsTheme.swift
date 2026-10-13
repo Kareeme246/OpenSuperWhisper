@@ -74,6 +74,14 @@ enum STheme {
     static let danger    = dyn(dark: hex(0xF08A7A), light: hex(0xA94327))
     static let customText = dyn(dark: hex(0xD7A6E3), light: hex(0x7A3F8A))
     static let customBg  = dyn(dark: hex(0x46304D), light: hex(0xEFE0F3))
+
+    // MARK: Input level
+
+    /// The input level bar's zones, from too quiet to transcribe to good. Brighter than the
+    /// status colours: they are read as a fill on the bar, never as text.
+    static let levelQuiet = dyn(dark: hex(0xE8705F), light: hex(0xCF4A33))
+    static let levelLow   = dyn(dark: hex(0xF0A35E), light: hex(0xE08A2C))
+    static let levelGood  = dyn(dark: hex(0x6FC08F), light: hex(0x3E9663))
 }
 
 // MARK: - Layout
@@ -116,15 +124,31 @@ struct SPaneStack: Layout {
     }
 }
 
-/// Themed multiline editor (regex, prompts, per-app instructions).
+/// Themed multiline editor (regex, prompts, per-app instructions, the feedback message).
 struct SEditor: View {
     @Binding var text: String
     let height: CGFloat
+    var fontSize: CGFloat = 11.5
+    var monospaced = true
+    /// Shown while the text is empty; TextEditor has no prompt of its own.
+    var placeholder: LocalizedStringKey?
 
     var body: some View {
         TextEditor(text: $text)
-            .scaledFont(size: 11.5, design: .monospaced)
+            .scaledFont(size: fontSize, design: monospaced ? .monospaced : .default)
+            .foregroundColor(STheme.textBright)
             .scrollContentBackground(.hidden)
+            .overlay(alignment: .topLeading) {
+                if let placeholder, text.isEmpty {
+                    // Inset by the text view's own line-fragment padding, so it sits where typing starts.
+                    Text(placeholder)
+                        .scaledFont(size: fontSize, design: monospaced ? .monospaced : .default)
+                        .foregroundColor(STheme.faint)
+                        .padding(.leading, 5)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
             .padding(6)
             .frame(height: height)
             .background(RoundedRectangle(cornerRadius: 7).fill(STheme.inputBg))

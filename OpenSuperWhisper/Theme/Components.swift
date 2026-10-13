@@ -485,12 +485,17 @@ struct SSlider: View {
     let range: ClosedRange<Double>
     var step: Double? = nil
     let valueLabel: String
+    /// Nil stretches the track across whatever width the slider is given.
+    var trackWidth: CGFloat? = 180
+    /// Names the slider for VoiceOver, which then reads `valueLabel` as its value instead of the
+    /// raw position, and skips the label beside it.
+    var accessibilityLabel: LocalizedStringKey? = nil
 
     var body: some View {
         HStack(spacing: 12) {
             // Stepped by rounding rather than through `Slider(step:)`, which on macOS draws a
             // tick under the track for every step.
-            Slider(value: Binding(
+            let slider = Slider(value: Binding(
                 get: { value },
                 set: { newValue in
                     guard let step, step > 0 else { value = newValue; return }
@@ -498,12 +503,21 @@ struct SSlider: View {
                     value = min(max(snapped, range.lowerBound), range.upperBound)
                 }), in: range)
             .tint(STheme.accent)
-            .frame(width: 180)
+            .frame(width: trackWidth)
+            .frame(maxWidth: trackWidth == nil ? .infinity : nil)
+            if let accessibilityLabel {
+                slider
+                    .accessibilityLabel(Text(accessibilityLabel))
+                    .accessibilityValue(Text(verbatim: valueLabel))
+            } else {
+                slider
+            }
             Text(valueLabel)
                 .scaledFont(size: 13, weight: .medium)
                 .monospacedDigit()
                 .foregroundColor(STheme.textSecondary)
                 .frame(minWidth: 52, alignment: .trailing)
+                .accessibilityHidden(accessibilityLabel != nil)
         }
     }
 }
@@ -523,7 +537,9 @@ struct STextField: View {
     }
 
     var body: some View {
-        TextField(prompt, text: $text)
+        // The prompt in faint: the text colour below would otherwise draw it nearly as dark as
+        // a value already typed in.
+        TextField(text: $text, prompt: Text(prompt).foregroundColor(STheme.faint)) { Text(prompt) }
             .textFieldStyle(.plain)
             .scaledFont(size: 13, design: monospaced ? .monospaced : .default)
             .foregroundColor(STheme.textBright)
@@ -621,6 +637,8 @@ struct SFilterChip: View {
 struct ModalCard<Content: View>: View {
     var maxWidth: CGFloat = 1040
     var maxHeight: CGFloat = 720
+    /// As tall as the content rather than as tall as the window allows, for a short form.
+    var hugsContent = false
     var onClose: () -> Void
     @ViewBuilder var content: () -> Content
 
@@ -630,8 +648,7 @@ struct ModalCard<Content: View>: View {
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onClose)
-            content()
-                .frame(maxWidth: maxWidth, maxHeight: maxHeight)
+            sizedContent
                 .background(STheme.cardBg)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(STheme.border, lineWidth: 1))
@@ -639,6 +656,35 @@ struct ModalCard<Content: View>: View {
                 .padding(28)
         }
         .onExitCommand(perform: onClose)
+    }
+
+    @ViewBuilder
+    private var sizedContent: some View {
+        if hugsContent {
+            HeightCap(maxHeight: maxHeight) { content() }
+                .frame(maxWidth: maxWidth)
+        } else {
+            content()
+                .frame(maxWidth: maxWidth, maxHeight: maxHeight)
+        }
+    }
+}
+
+/// As tall as the content would like, but no taller than `maxHeight` or the room offered, where
+/// `.frame(maxHeight:)` takes all it is offered and leaves a short content floating in the middle.
+/// A ScrollView inside asks for its whole content, and only scrolls once that does not fit.
+private struct HeightCap: Layout {
+    let maxHeight: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let content = subviews.first else { return .zero }
+        let ideal = content.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        let room = min(proposal.height ?? maxHeight, maxHeight)
+        return content.sizeThatFits(ProposedViewSize(width: proposal.width, height: min(ideal.height, room)))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading, proposal: ProposedViewSize(bounds.size))
     }
 }
 
