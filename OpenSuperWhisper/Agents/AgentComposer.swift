@@ -51,14 +51,10 @@ struct AgentComposer: View {
 
             // While the microphone is open the bar folds to one line that says so, then
             // opens back onto the whole reply: a multi-line draft beside the controls made a
-            // tall bar with most of its width doing nothing.
+            // tall bar with most of its width doing nothing. With live text on, the words being
+            // heard take that line once they come in.
             if listening {
-                Text(Self.listeningLabel(draft: draftText))
-                    .scaledFont(size: 14)
-                    .foregroundColor(STheme.hint)
-                    .lineLimit(1)
-                    .truncationMode(.head)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                AgentListeningLine(label: Self.listeningLabel(draft: draftText))
                     .transition(.opacity)
             } else {
                 replyField

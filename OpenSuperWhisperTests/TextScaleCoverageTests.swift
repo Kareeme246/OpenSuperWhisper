@@ -48,6 +48,7 @@ final class TextScaleCoverageTests: XCTestCase {
         "Agents/AgentComposer.swift",
         "Agents/AgentPanelParts.swift",
         "Agents/AgentRecordingControls.swift",
+        "Agents/AgentLiveTranscript.swift",
         "Agents/MarkdownView.swift",
         "Agents/MarkdownAttributed.swift",
     ]
