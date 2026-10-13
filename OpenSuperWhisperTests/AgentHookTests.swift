@@ -149,6 +149,37 @@ final class AgentHookTests: XCTestCase {
             "other tools still ask")
     }
 
+    private var stringifiedQuestionInput: [String: Any] {
+        let options = #"[{"label":"main","description":"Ship it"},{"label":"dev"}]"#
+        let questions = try! JSONSerialization.data(withJSONObject: [
+            ["question": "Which branch?", "header": "Branch", "multiSelect": false, "options": options],
+        ])
+        return ["questions": String(decoding: questions, as: UTF8.self)]
+    }
+
+    func testQuestionsSentAsJSONTextStillMakeAQuestionCard() {
+        let request = AgentHookCommand.makeQuestionRequest(
+            from: askUserQuestionHook("PreToolUse", input: stringifiedQuestionInput))
+        XCTAssertEqual(request?.questions?.first?.question, "Which branch?")
+        XCTAssertEqual(request?.questions?.first?.options.map(\.label), ["main", "dev"])
+        XCTAssertEqual(request?.questions?.first?.options.first?.description, "Ship it")
+    }
+
+    func testQuestionsSentAsJSONTextGoBackAsLists() throws {
+        let data = try XCTUnwrap(AgentHookCommand.questionHookOutput(
+            for: AgentResponse(action: .answer, answers: ["Which branch?": "dev"]), toolInput: stringifiedQuestionInput))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let updated = try XCTUnwrap((json["hookSpecificOutput"] as? [String: Any])?["updatedInput"] as? [String: Any])
+        let questions = try XCTUnwrap(updated["questions"] as? [[String: Any]])
+        XCTAssertEqual((questions.first?["options"] as? [[String: Any]])?.count, 2)
+        XCTAssertEqual(updated["answers"] as? [String: String], ["Which branch?": "dev"])
+    }
+
+    func testTextThatIsNotAQuestionListMakesNoRequest() {
+        XCTAssertNil(AgentHookCommand.makeQuestionRequest(
+            from: askUserQuestionHook("PreToolUse", input: ["questions": "Which branch?"])))
+    }
+
     // MARK: Spoken answers
 
     func testSpokenVerdicts() {

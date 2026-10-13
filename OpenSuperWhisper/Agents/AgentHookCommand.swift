@@ -140,7 +140,7 @@ enum AgentHookCommand {
     static func makeQuestionRequest(from json: [String: Any], now: Date = Date(),
                                     pid: Int32 = getpid()) -> AgentRequest? {
         guard let input = json["tool_input"] as? [String: Any],
-              let raw = input["questions"] as? [[String: Any]] else { return nil }
+              let raw = questionList(in: input) else { return nil }
         let questions: [AgentQuestion] = raw.compactMap { item in
             guard let question = item["question"] as? String else { return nil }
             let options = ((item["options"] as? [[String: Any]]) ?? []).compactMap { option -> AgentQuestion.Option? in
@@ -154,6 +154,25 @@ enum AgentHookCommand {
         var request = baseRequest(kind: .question, json: json, message: "", now: now, pid: pid)
         request.questions = questions
         return request
+    }
+
+    /// The questions with their options as lists. A model can write either list as JSON text
+    /// instead of an array, and read as is the question would come to nothing: no card, and
+    /// the agent left waiting in its terminal.
+    static func questionList(in input: [String: Any]) -> [[String: Any]]? {
+        guard let questions = objectList(input["questions"]) else { return nil }
+        return questions.map { item in
+            var item = item
+            if let options = objectList(item["options"]) { item["options"] = options }
+            return item
+        }
+    }
+
+    private static func objectList(_ value: Any?) -> [[String: Any]]? {
+        if let list = value as? [[String: Any]] { return list }
+        guard let text = value as? String,
+              let decoded = try? JSONSerialization.jsonObject(with: Data(text.utf8)) else { return nil }
+        return decoded as? [[String: Any]]
     }
 
     /// What the tool is about to do, in the form a person checks: the command, the file, the
@@ -188,10 +207,12 @@ enum AgentHookCommand {
     }
 
     /// The answers go in the tool's own input, which the hook returns whole: Claude Code then
-    /// runs AskUserQuestion with them already filled in and never shows the prompt.
+    /// runs AskUserQuestion with them already filled in and never shows the prompt. The
+    /// questions go back as real lists, which is what the tool's input is checked against.
     static func questionHookOutput(for response: AgentResponse?, toolInput: [String: Any]?) -> Data? {
         guard let response, response.action == .answer, !response.answers.isEmpty,
               var updated = toolInput else { return nil }
+        if let questions = questionList(in: updated) { updated["questions"] = questions }
         updated["answers"] = response.answers
         return try? JSONSerialization.data(withJSONObject: [
             "hookSpecificOutput": [
