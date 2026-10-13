@@ -355,7 +355,11 @@ class MicrophoneService: ObservableObject {
     }
 
     func getCoreAudioDeviceID(for device: AudioDevice) -> AudioDeviceID? {
-        var deviceID = device.id as CFString
+        getCoreAudioDeviceID(forUID: device.id)
+    }
+
+    func getCoreAudioDeviceID(forUID uid: String) -> AudioDeviceID? {
+        var deviceID = uid as CFString
         var audioDeviceID = AudioDeviceID()
         var propertySize = UInt32(MemoryLayout<AudioDeviceID>.size)
         
@@ -519,7 +523,10 @@ class MicrophoneService: ObservableObject {
     
     func getInputChannelCount(for device: AudioDevice) -> Int {
         guard let deviceID = getCoreAudioDeviceID(for: device) else { return 1 }
-        
+        return getInputChannelCount(for: deviceID)
+    }
+
+    func getInputChannelCount(for deviceID: AudioDeviceID) -> Int {
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyStreamConfiguration,
             mScope: kAudioDevicePropertyScopeInput,
