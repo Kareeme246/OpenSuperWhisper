@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import AppKit
 import CoreAudio
+import OpenSuperWhisperCore
 
 class AudioRecorder: NSObject, ObservableObject {
     @Published var isRecording = false
@@ -104,6 +105,9 @@ class AudioRecorder: NSObject, ObservableObject {
     /// Keeping `primedRecorder` alive holds the audio engine in an initialized state,
     /// eliminating the cold-start delay when the user triggers the first real recording.
     private func primeAudioHardware() {
+        // The hosted test runner launches the app under another code signature, so preparing a
+        // recorder there makes macOS ask for the microphone and the runner hangs on the prompt.
+        guard !DefaultsStore.isRunningTests else { return }
         let primedURL = temporaryDirectory.appendingPathComponent("primed.wav")
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatLinearPCM),
