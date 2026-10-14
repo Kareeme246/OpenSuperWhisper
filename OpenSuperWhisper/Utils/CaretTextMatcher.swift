@@ -15,7 +15,10 @@ enum CaretTextMatcher {
     ///     dictionary's terms. Words capitalised mid-sentence in the field or in the dictation
     ///     itself are added: the engine capitalises every first word, so case alone cannot tell
     ///     "Paris" from "Tomorrow", but the rest of the text can.
-    static func fit(_ text: String, into field: TextAroundCaret, properNouns: Set<String> = []) -> String {
+    ///   - adjustCase: false where a capital mid-sentence is the spelling, see `adjustsCase(language:)`.
+    ///     The final mark and the spaces are still fitted.
+    static func fit(_ text: String, into field: TextAroundCaret, properNouns: Set<String> = [],
+                    adjustCase: Bool = true) -> String {
         let core = trimmingHorizontalSpace(text)
         guard !core.isEmpty else { return text }
 
@@ -32,7 +35,8 @@ enum CaretTextMatcher {
             .union(capitalisedWords(in: field.before))
             .union(capitalisedWords(in: field.after))
             .union(capitalisedWords(in: core))
-        var fitted = matchingCase(core, before: before, replacing: selected, properNouns: nouns)
+        var fitted = adjustCase
+            ? matchingCase(core, before: before, replacing: selected, properNouns: nouns) : core
         if continuesSentence(after) { fitted = droppingFinalMark(fitted) }
         if needsLeadingSpace(before: before, dictation: fitted) { fitted = " " + fitted }
         if needsTrailingSpace(dictation: fitted, after: after) { fitted += " " }
@@ -40,6 +44,18 @@ enum CaretTextMatcher {
     }
 
     // MARK: - Case
+
+    /// German and Luxembourgish capitalise every noun, so a capital in the middle of a sentence
+    /// is usually the spelling, and words the field has not shown capitalised yet cannot be told
+    /// apart from the engine's sentence start. Their case is left as the engine wrote it. An
+    /// unknown language is fitted: the guess is the caller's to make.
+    static func adjustsCase(language: String?) -> Bool {
+        guard let language else { return true }
+        let primary = language.lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" }).first
+        return !nounCapitalisingLanguages.contains(primary.map(String.init) ?? "")
+    }
+
+    static let nounCapitalisingLanguages: Set<String> = ["de", "lb", "gsw"]
 
     /// The first letter as the place calls for: the case of the first letter of a selection
     /// being replaced, else lowercase when the caret is inside a sentence.
@@ -53,27 +69,64 @@ enum CaretTextMatcher {
     }
 
     /// Whether what comes next starts a sentence. The start of the field and a line break count:
-    /// a new line or a new message is written as one. Quotes and brackets are looked through,
-    /// so `He said "` is mid-sentence and `It ended." ` is not.
+    /// a new line or a new message is written as one, and so does a line holding only a list,
+    /// heading or quote marker ("- ", "## ", "1) ", "> "). Quotes and brackets are looked
+    /// through, so `He said "` is mid-sentence and `It ended." ` is not.
     static func endsSentence(_ before: String) -> Bool {
         for character in before.reversed() {
             if character.isNewline { return true }
             if isHorizontalSpace(character) || quotesAndBrackets.contains(character) { continue }
-            return sentenceEnds.contains(character)
+            return sentenceEnds.contains(character) || isMarkerLine(lastLine(of: before))
         }
         return true
     }
 
+    /// Whether a line holds only list, heading or quote markers, each followed by a space: what
+    /// precedes the first word of a bullet, a numbered item, a task, a Markdown heading or a
+    /// quoted reply. A marker with no space after it is something else: a tag ("#release"), a
+    /// hyphenated word.
+    static func isMarkerLine(_ line: Substring) -> Bool {
+        guard line.utf8.count <= maxMarkerLineLength, let last = line.last, isHorizontalSpace(last) else {
+            return false
+        }
+        // A task box's own space would split it in two.
+        let tokens = line.replacingOccurrences(of: "[ ]", with: "[x]").split(whereSeparator: isHorizontalSpace)
+        return !tokens.isEmpty && tokens.allSatisfy(isMarker)
+    }
+
+    private static func isMarker(_ token: Substring) -> Bool {
+        if token.allSatisfy(bulletMarks.contains) { return true }
+        if token.count <= 6, token.allSatisfy({ $0 == "#" }) { return true }
+        if token == "[x]" || token == "[X]" { return true }
+        guard let mark = token.last, mark == "." || mark == ")" else { return false }
+        let number = token.dropLast()
+        return (1...3).contains(number.count) && number.allSatisfy(\.isASCII) && number.allSatisfy(\.isNumber)
+    }
+
+    private static func lastLine(of text: String) -> Substring {
+        text.lastIndex(where: \.isNewline).map { text[text.index(after: $0)...] } ?? text[...]
+    }
+
     /// Lowercases a word capitalised only for starting the dictation. Left alone: "I" and its
-    /// contractions, words with a capital elsewhere (acronyms, "GitHub", "McDonald"), and proper
-    /// nouns.
+    /// contractions, words with a capital elsewhere (acronyms, "GitHub", "McDonald"), proper
+    /// nouns, and a title or an initial in front of a name.
     static func lowercasingFirst(_ core: String, properNouns: Set<String>) -> String {
         let word = core.prefix(while: \.isLetter)
         guard let first = word.first, first.isUppercase,
               !word.dropFirst().contains(where: \.isUppercase),
               word != "I",
+              !isTitleOrInitial(word, in: core),
               !properNouns.contains(where: { startsWith(core, $0) }) else { return core }
         return first.lowercased() + String(core.dropFirst())
+    }
+
+    /// "Mr. Smith", "Dr. Who", "J. K. Rowling": the abbreviation is part of the name after it,
+    /// which the period and the capital that follows show.
+    private static func isTitleOrInitial(_ word: Substring, in core: String) -> Bool {
+        guard word.count == 1 || titleAbbreviations.contains(String(word)) else { return false }
+        let rest = core.dropFirst(word.count)
+        guard rest.first == "." else { return false }
+        return rest.dropFirst().drop(while: isHorizontalSpace).first?.isUppercase ?? false
     }
 
     static func capitalisingFirst(_ core: String) -> String {
@@ -89,15 +142,29 @@ enum CaretTextMatcher {
         var words = Set<String>()
         var word = ""
         var atSentenceStart = true
+        // The current line up to the word being read, to see a list marker in front of it. Not
+        // grown past what a marker line can be: longer, it can only be text.
+        var line = ""
+        var lineBeforeWord = ""
         func endWord() {
             guard let first = word.first else { return }
-            if !atSentenceStart, first.isUppercase { words.insert(word) }
+            if !atSentenceStart, first.isUppercase, !isMarkerLine(lineBeforeWord[...]) { words.insert(word) }
             atSentenceStart = false
             word = ""
         }
         for character in text {
-            if character.isLetter { word.append(character); continue }
+            if character.isLetter {
+                if word.isEmpty { lineBeforeWord = line }
+                word.append(character)
+                if line.utf8.count <= maxMarkerLineLength { line.append(character) }
+                continue
+            }
             endWord()
+            if character.isNewline {
+                line = ""
+            } else if line.utf8.count <= maxMarkerLineLength {
+                line.append(character)
+            }
             if character.isNewline || sentenceEnds.contains(character) {
                 atSentenceStart = true
             } else if character.isNumber {
@@ -112,20 +179,33 @@ enum CaretTextMatcher {
 
     /// Whether the text after the caret carries on the sentence the dictation would end: it
     /// starts with a lowercase word, or with punctuation that a period would only double.
+    /// Closing brackets and quotes are looked through, so a dictation inside "(…) tomorrow" or
+    /// `"…" and left` loses its period too.
     static func continuesSentence(_ after: String) -> Bool {
-        guard let next = after.first(where: { !isHorizontalSpace($0) }), !next.isNewline else { return false }
-        return next.isLowercase || continuingPunctuation.contains(next)
+        guard let index = after.indices.first(where: {
+            !isHorizontalSpace(after[$0]) && !closes(at: $0, in: after)
+        }) else { return false }
+        let next = after[index]
+        return !next.isNewline && (next.isLowercase || continuingPunctuation.contains(next))
+    }
+
+    /// A closing bracket or quote, or a straight quote that does not open one.
+    private static func closes(at index: String.Index, in text: String) -> Bool {
+        let character = text[index]
+        if closingMarks.contains(character) { return true }
+        return (character == "\"" || character == "'") && !opens(at: index, in: text)
     }
 
     /// Drops one final `.`, `!` or `?`, and the space French puts before the last two. Left
     /// alone: an ellipsis or doubled marks, which were meant, and a period closing an
-    /// abbreviation ("a.m.", "e.g."), which is part of the word.
+    /// abbreviation ("a.m.", "e.g.") or an initial ("Plan B."), which is part of the word. A
+    /// number is not an initial: "level 5." loses it.
     static func droppingFinalMark(_ core: String) -> String {
         guard let mark = core.last, droppableMarks.contains(mark) else { return core }
         let word = trimmingHorizontalSpace(String(core.dropLast()))
         guard let last = word.last, last.isLetter || last.isNumber else { return core }
         if mark == ".", let lastWord = word.split(whereSeparator: \.isWhitespace).last,
-           lastWord.contains(".") || lastWord.count == 1 {
+           lastWord.contains(".") || (lastWord.count == 1 && lastWord.first?.isLetter == true) {
             return core
         }
         return word
@@ -151,13 +231,23 @@ enum CaretTextMatcher {
     }
 
     /// Never next to an existing space, inside a script written without spaces, after an
-    /// opening mark, or after a mark a word is typed straight after.
+    /// opening mark, after a mark a word is typed straight after, or after a French elision.
     private static func mayPutSpace(after left: String, before right: String) -> Bool {
         guard let last = left.last, let next = right.first else { return false }
         return !last.isWhitespace && !next.isWhitespace
             && !isSpaceless(last) && !isSpaceless(next)
             && !gluesToNext.contains(last)
+            && !endsWithElision(left)
             && !opens(at: left.index(before: left.endIndex), in: left)
+    }
+
+    /// "l'", "d'", "j'", "qu'", "jusqu'"…: French drops the vowel and glues the word to the next
+    /// one. Only these words: after any other, an apostrophe closes a quote or a possessive
+    /// ("the students' "), and the space stays.
+    static func endsWithElision(_ text: String) -> Bool {
+        guard let last = text.last, last == "'" || last == "’" else { return false }
+        let word = String(text.dropLast().reversed().prefix(while: \.isLetter).reversed()).lowercased()
+        return elidingWords.contains(word)
     }
 
     /// Whether the mark at `index` opens something. A straight quote opens when it follows a
@@ -180,14 +270,23 @@ enum CaretTextMatcher {
     static let droppableMarks: Set<Character> = [".", "!", "?"]
     static let continuingPunctuation: Set<Character> = [",", ";", ":", ".", "!", "?", "…"]
     static let openingMarks: Set<Character> = ["(", "[", "{", "“", "‘", "«", "‹", "„", "‚", "¿", "¡"]
-    static let quotesAndBrackets: Set<Character> = openingMarks.union([
-        ")", "]", "}", "”", "’", "»", "›", "\"", "'",
-    ])
+    static let closingMarks: Set<Character> = [")", "]", "}", "”", "’", "»", "›"]
+    static let quotesAndBrackets: Set<Character> = openingMarks.union(closingMarks).union(["\"", "'"])
     static let hangsOnPreviousWord: Set<Character> = [
         ",", ".", ";", ":", "!", "?", "…", "%", ")", "]", "}", "”", "’", "»", "›",
     ]
     /// Marks a word is typed straight after: a mention, a tag, a path, a hyphenated word.
     static let gluesToNext: Set<Character> = ["@", "#", "/", "\\", "-", "_"]
+    static let bulletMarks: Set<Character> = ["-", "*", "+", "•", "◦", "‣", "–", ">"]
+    /// "> > - [ ] " is ten: anything much longer is a line of text, not markers.
+    static let maxMarkerLineLength = 24
+    static let elidingWords: Set<String> = [
+        "c", "d", "j", "l", "m", "n", "s", "t", "qu", "jusqu", "lorsqu", "puisqu", "quoiqu", "presqu",
+    ]
+    static let titleAbbreviations: Set<String> = [
+        "Mr", "Mrs", "Ms", "Mx", "Dr", "Prof", "St", "Sr", "Jr", "Mt", "Rev", "Capt", "Lt", "Col", "Sgt",
+        "Mme", "Mlle", "Mgr", "Pr",
+    ]
 
     static func isHorizontalSpace(_ character: Character) -> Bool {
         character.isWhitespace && !character.isNewline
