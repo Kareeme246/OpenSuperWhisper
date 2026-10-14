@@ -33,6 +33,15 @@ final class AgentPromptPasteTests: XCTestCase {
         XCTAssertFalse(Paste.isAgentPrompt(bundleID: nil, windowTitle: "claude"))
     }
 
+    func testATabSwitchShowsInTheTitleButClaudesWorkingMarkDoesNot() {
+        XCTAssertTrue(Paste.isSameTab("\u{25D0} Fix the paste", as: "\u{25D1} Fix the paste"))
+        XCTAssertTrue(Paste.isSameTab("\u{25D0} Fix the paste", as: "\u{2733} Fix the paste"),
+                      "the agent finishing its turn is still the same tab")
+        XCTAssertTrue(Paste.isSameTab(nil, as: nil))
+        XCTAssertFalse(Paste.isSameTab("\u{2733} Fix the paste", as: "maxim — -zsh — 80×24"))
+        XCTAssertFalse(Paste.isSameTab("\u{2733} Fix the paste", as: nil))
+    }
+
     // MARK: - Pieces
 
     private let small = AgentPromptPaste.Budget(maxLength: 20, maxLineBreaks: 2)
@@ -72,6 +81,16 @@ final class AgentPromptPasteTests: XCTestCase {
         let pieces = assertPieces("x\n\n\n\n\n\ny", budget: small)
 
         XCTAssertEqual(pieces, ["x\n\n", "\n\n", "\n\ny"])
+    }
+
+    /// Blank lines holding a space or a tab, as dictation post-processing can leave them.
+    func testBlankLinesWithSpacesInThemAreSharedOutToo() {
+        let pieces = assertPieces("a\n \n \n \nb", budget: small)
+
+        XCTAssertEqual(pieces.count, 2, "\(pieces)")
+        for piece in pieces {
+            XCTAssertLessThanOrEqual(Paste.lineBreaks(in: Substring(piece)), 2, piece)
+        }
     }
 
     func testALongLineIsCutBetweenWordsNeverInOne() {
@@ -172,12 +191,14 @@ final class AgentPromptPasteTests: XCTestCase {
         var changes: [Int] = []
     }
 
-    private func send(_ pieces: [String], keepOnClipboard: Bool = false, readsUpTo: Int = .max,
-                      inFrontFor: Int = .max, terminal: Terminal) async -> TranscriptInserter.Insertion {
+    private func send(_ pieces: [String], keepOnClipboard: Bool = false, warnWhenMissed: Bool = false,
+                      readsUpTo: Int = .max, inFrontFor: Int = .max, wantedFor: Int = .max,
+                      terminal: Terminal) async -> TranscriptInserter.Insertion {
         let board = pasteboard!
         return await TranscriptInserter.pasteInPieces(
             pieces, standalone: pieces.joined(), keepOnClipboard: keepOnClipboard,
-            retryShortcut: nil, warnWhenMissed: false, on: board, timing: timing, gap: gap,
+            retryShortcut: nil, warnWhenMissed: warnWhenMissed, on: board, timing: timing, gap: gap,
+            wanted: { terminal.pastes < wantedFor },
             stillInFront: { terminal.pastes < inFrontFor },
             paste: {
                 terminal.pastes += 1
@@ -245,6 +266,68 @@ final class AgentPromptPasteTests: XCTestCase {
                        "unannounced, the user's clipboard is not traded for the rest")
     }
 
+    /// With the warning on, the rest goes on the clipboard and the user is told to paste it,
+    /// as they are for any paste that found no field.
+    func testAnotherAppInFrontWithTheWarningOnLeavesTheRestOnTheClipboard() async {
+        let terminal = Terminal()
+
+        let insertion = await send(["one ", "two ", "three"], warnWhenMissed: true, inFrontFor: 1,
+                                   terminal: terminal)
+        await settle(afterAStop: true)
+
+        XCTAssertEqual(insertion, .onClipboard)
+        XCTAssertEqual(terminal.pastes, 1)
+        XCTAssertEqual(TranscriptInserter.unlandedPaste, "two three")
+        XCTAssertEqual(pasteboard.string(forType: .string), "two three")
+    }
+
+    /// "Copy to clipboard" on: dictations stay there anyway, so the rest does, unannounced.
+    func testAnotherAppInFrontWhileKeepingItOnTheClipboardLeavesTheRestThere() async {
+        let terminal = Terminal()
+
+        let insertion = await send(["one ", "two ", "three"], keepOnClipboard: true, inFrontFor: 1,
+                                   terminal: terminal)
+        await settle(afterAStop: true)
+
+        XCTAssertEqual(insertion, .cutShort)
+        XCTAssertEqual(terminal.pastes, 1)
+        XCTAssertEqual(TranscriptInserter.unlandedPaste, "two three")
+        XCTAssertEqual(pasteboard.string(forType: .string), "two three")
+    }
+
+    /// The dictation was thrown away while it went in: nothing more is pasted, and nothing is
+    /// kept for the paste-last shortcut either.
+    func testADiscardedDictationStopsThePiecesAndKeepsNothing() async {
+        let terminal = Terminal()
+
+        let insertion = await send(["one ", "two ", "three"], wantedFor: 1, terminal: terminal)
+        await settle(afterAStop: true)
+
+        XCTAssertEqual(insertion, .cutShort)
+        XCTAssertEqual(terminal.pastes, 1)
+        XCTAssertNil(TranscriptInserter.unlandedPaste)
+        XCTAssertEqual(pasteboard.string(forType: .string), "original")
+    }
+
+    /// The paste-last shortcut keeps out of the way of a paste in pieces only while it lasts.
+    func testThePasteIsKnownToBeGoingInWhileItLasts() async {
+        let board = pasteboard!
+        var flags: [Bool] = []
+
+        _ = await TranscriptInserter.pasteInPieces(
+            ["one ", "two"], standalone: "one two", keepOnClipboard: false,
+            retryShortcut: nil, warnWhenMissed: false, on: board, timing: timing, gap: gap,
+            stillInFront: { true },
+            paste: {
+                flags.append(TranscriptInserter.pastingInPieces)
+                _ = board.string(forType: .string)
+            })
+
+        XCTAssertEqual(flags, [true, true])
+        XCTAssertFalse(TranscriptInserter.pastingInPieces)
+        await settle()
+    }
+
     /// A newer transcription took over while the pieces were going out: it is now the one that
     /// counts, and the older paste stops.
     func testANewerTranscriptionStopsThePieces() async {
@@ -271,7 +354,18 @@ final class AgentPromptPasteTests: XCTestCase {
         let piece = TranscriptInserter.pieceTiming(timing, gap: 0.25)
 
         XCTAssertGreaterThan(piece.settle, 0.25 + timing.settle)
+        XCTAssertGreaterThan(piece.hold, timing.hold, "the next piece may wait out the hold")
         XCTAssertEqual(piece.deadline, timing.deadline, "a piece nobody takes is still caught as soon")
+    }
+
+    /// An app that reads a paste twice must find the same piece both times: the next waits out
+    /// the hold after the ⌘V, and the gap after the read.
+    func testTheNextPieceWaitsOutTheHold() {
+        let pause = TranscriptInserter.pauseBeforeNextPiece
+
+        XCTAssertEqual(pause(0.25, 0.5, 0.05), 0.45, accuracy: 1e-9, "read at once: the hold is longer")
+        XCTAssertEqual(pause(0.25, 0.5, 0.4), 0.25, accuracy: 1e-9, "read late: the gap is longer")
+        XCTAssertEqual(pause(0.25, 0.5, 2), 0.25, accuracy: 1e-9)
     }
 
     // MARK: - Setting

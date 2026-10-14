@@ -66,6 +66,18 @@ enum AgentPromptPaste {
         return agentCommands.contains { lowered.contains($0) }
     }
 
+    /// Whether two window titles read between pieces name the same tab. Another tab of the same
+    /// terminal may run a plain shell, and a ⌘V meant for the agent must not reach it; a tab
+    /// switch shows only in the title. Claude Code's mark is left out, since it turns from ◐ to
+    /// ◑ every moment while the agent works, and the topic after it is what names the tab.
+    static func isSameTab(_ title: String?, as other: String?) -> Bool {
+        tabName(title) == tabName(other)
+    }
+
+    private static func tabName(_ title: String?) -> Substring? {
+        title.map { $0.drop { titleMarks.contains($0) || $0.isWhitespace } }
+    }
+
     // MARK: - Pieces
 
     /// Claude Code counts the length after turning each tab into four spaces, and in UTF-16
@@ -123,7 +135,8 @@ enum AgentPromptPaste {
     }
 
     /// The text cut at every place a piece may end: after a run of whitespace, before the next
-    /// word, or between two line breaks, outside code. A run holding a line break ends a line.
+    /// word, or after a line break with another right after it or earlier in the same run,
+    /// outside code. A run holding a line break ends a line.
     static func lines(of text: String) -> [Line] {
         let code = codeRanges(in: text)
         var lines: [Line] = []
@@ -135,16 +148,19 @@ enum AgentPromptPaste {
         while index < text.endIndex {
             let character = text[index]
             let next = text.index(after: index)
+            let brokeEarlierInRun = runHasBreak
             if character.isWhitespace {
                 runHasBreak = runHasBreak || character.isNewline
             } else {
                 sawWord = true
                 runHasBreak = false
             }
-            // Between two line breaks counts too: blank lines in a row would otherwise go
-            // together, and three breaks fold in Claude Code whatever the length.
+            // Between two line breaks counts too, with only spaces or tabs between them: blank
+            // lines in a row would otherwise go together, and three breaks fold in Claude Code
+            // whatever the length.
             let endsWord = character.isWhitespace && sawWord && next < text.endIndex
-                && (!text[next].isWhitespace || (character.isNewline && text[next].isNewline))
+                && (!text[next].isWhitespace
+                    || (character.isNewline && (text[next].isNewline || brokeEarlierInRun)))
                 && !code.contains { $0.contains(next) && $0.lowerBound != next }
             if endsWord {
                 words.append(text[wordStart..<next])

@@ -38,8 +38,10 @@ enum TranscriptInserter {
         case done
         /// No field to put it in: it is on the clipboard, and the user is to be told ⌘V.
         case onClipboard
-        /// A paste in pieces stopped part way (#165). What was left is held for the paste-last
-        /// shortcut, and Return must not follow: it would send half a prompt.
+        /// A paste in pieces stopped part way (#165), and Return must not follow: it would send
+        /// half a prompt. What was left is held for the paste-last shortcut when a piece missed
+        /// or another window came to the front, and dropped when a newer transcription took over
+        /// or the dictation was thrown away.
         case cutShort
     }
 
@@ -60,13 +62,14 @@ enum TranscriptInserter {
     ///     (#166, see `richText(for:into:submitting:)`).
     ///   - windowTitle: the title of the window it goes to, which tells Claude Code and Codex in a
     ///     terminal from a shell (#165). Taken when `targetBundleID` was, for the same reason.
+    ///   - wanted: `false` once the dictation was thrown away, which stops a paste in pieces.
     /// - Returns: once the text is in, so Return can follow: for a paste in pieces, once the
     ///   last piece has been read.
     @MainActor
     @discardableResult
     static func insert(_ prepared: Prepared, honorAutoPastePreference: Bool,
                        targetBundleID: String? = nil, windowTitle: String? = nil,
-                       submitting: Bool = false) async -> Insertion {
+                       submitting: Bool = false, wanted: () -> Bool = { true }) async -> Insertion {
         let text = prepared.fitted
         let prefs = AppPreferences.shared
         let rule = AppInsertionRule.rule(for: targetBundleID, in: prefs.appInsertionRules)
@@ -110,7 +113,7 @@ enum TranscriptInserter {
                 pasteKeyCode: KeyboardLayoutProvider.shared.pasteKeyCode())
             if pieces.count > 1 {
                 return await pasteInPieces(pieces, standalone: prepared.standalone,
-                                           keepOnClipboard: prefs.autoCopyToClipboard)
+                                           keepOnClipboard: prefs.autoCopyToClipboard, wanted: wanted)
             }
             pasteThroughClipboard(prepared,
                                   rich: richText(for: prepared, into: targetBundleID, submitting: submitting),

@@ -312,8 +312,11 @@ final class DictationPipeline: ObservableObject {
             }
 
             // Submit only when auto-paste actually inserted text somewhere. A short settle delay lets
-            // the pasted text land in the field before Return reaches it.
-            if shouldSubmit && AppPreferences.shared.autoPasteTranscription && delivery == .inserted {
+            // the pasted text land in the field before Return reaches it. A paste in pieces takes
+            // seconds, long enough to throw the dictation away while it goes in (#165): what is
+            // in the field then stays there, unsent.
+            if shouldSubmit && AppPreferences.shared.autoPasteTranscription && delivery == .inserted
+                && !discarding {
                 try? await Task.sleep(nanoseconds: 120_000_000)
                 TextInserter.pressReturn()
             }
@@ -401,8 +404,9 @@ final class DictationPipeline: ObservableObject {
         case inserted
         /// On the clipboard for a manual ⌘V, and the user is told so.
         case onClipboardAnnounced
-        /// Not inserted, with the warning off, or only in part (#165): held for the paste-last
-        /// shortcut, and anything worth saying about it already said.
+        /// Not inserted, with the warning off: held for the paste-last shortcut. Or only in part
+        /// (#165), the rest held the same way unless a newer dictation took over or this one was
+        /// thrown away; anything worth saying about it is already said.
         case held
     }
 
@@ -469,8 +473,8 @@ final class DictationPipeline: ObservableObject {
     }
 
     /// Inserts through `TranscriptInserter`, where the insertion policy lives, shared with the
-    /// re-paste shortcut. A paste in pieces that stopped part way is `.held`: what was left is
-    /// kept for the shortcut, and Return must not send the half that went in (#165).
+    /// re-paste shortcut. A paste in pieces that stopped part way is `.held`: Return must not
+    /// send the half that went in (#165). It stops too once the dictation is thrown away.
     private func insertText(_ text: String, context: ContextSnapshot, language: String,
                             submitting: Bool) async -> Delivery {
         let prefs = AppPreferences.shared
@@ -478,7 +482,7 @@ final class DictationPipeline: ObservableObject {
         let insertion = await TranscriptInserter.insert(
             TranscriptInserter.prepared(text, fitToField: fitToField, language: language),
             honorAutoPastePreference: true, targetBundleID: context.bundleID,
-            windowTitle: context.windowTitle, submitting: submitting)
+            windowTitle: context.windowTitle, submitting: submitting, wanted: { !discarding })
         switch insertion {
         case .done: return .inserted
         case .onClipboard: return .onClipboardAnnounced
