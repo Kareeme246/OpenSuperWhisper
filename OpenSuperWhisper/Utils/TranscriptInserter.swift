@@ -45,12 +45,14 @@ enum TranscriptInserter {
     ///     the pipeline from the snapshot taken at record start rather than read here: transcription
     ///     runs in the background, so by the time this executes the frontmost app may be a different
     ///     one, and the rule has to be the one for the app the text is going to.
+    ///   - submitting: Return is pressed once the text is in, which keeps a list paste plain
+    ///     (#166, see `richText(for:into:submitting:)`).
     /// - Returns: `true` when insertion was skipped because no editable field was focused, so the
     ///   caller can leave the text on the clipboard and notify ⌘V.
     @MainActor
     @discardableResult
     static func insert(_ prepared: Prepared, honorAutoPastePreference: Bool,
-                       targetBundleID: String? = nil) -> Bool {
+                       targetBundleID: String? = nil, submitting: Bool = false) -> Bool {
         let text = prepared.fitted
         let prefs = AppPreferences.shared
         let rule = AppInsertionRule.rule(for: targetBundleID, in: prefs.appInsertionRules)
@@ -89,7 +91,8 @@ enum TranscriptInserter {
             // nothing looked exactly like an insertion that never happened.
             log(mechanism: "paste", chunks: 1, pause: 0,
                 pasteKeyCode: KeyboardLayoutProvider.shared.pasteKeyCode())
-            pasteThroughClipboard(prepared, rich: richText(for: text, into: targetBundleID),
+            pasteThroughClipboard(prepared,
+                                  rich: richText(for: prepared, into: targetBundleID, submitting: submitting),
                                   keepOnClipboard: prefs.autoCopyToClipboard)
             return false
         }
@@ -191,13 +194,18 @@ enum TranscriptInserter {
         }
     }
 
-    /// The list in `text` as rich text for the app it is pasted into, with "Lists as bullets"
-    /// on (#166). Only the paste carries it: the clipboard keeps the plain lines afterwards,
-    /// which read the same in any app the user takes them to.
+    /// The list in the text going into the field as rich text for the app it is pasted into,
+    /// with "Lists as bullets" on (#166). Only the paste carries it: the clipboard keeps the plain
+    /// lines afterwards, which read the same in any app the user takes them to.
+    ///
+    /// Not when Return follows the paste: the caret is then in the last item of a real list, and
+    /// a rich editor (Slack, a chat composer in a browser) takes Return there as a new bullet
+    /// rather than a send. The plain lines send the way they always did.
     @MainActor
-    static func richText(for text: String, into bundleID: String?) -> RichPasteText? {
-        guard AppPreferences.shared.pasteListsAsRichText,
-              let rich = RichListPaste.richText(for: text, into: bundleID) else { return nil }
+    static func richText(for prepared: Prepared, into bundleID: String?,
+                         submitting: Bool) -> RichPasteText? {
+        guard !submitting, AppPreferences.shared.pasteListsAsRichText,
+              let rich = RichListPaste.richText(for: prepared.fitted, into: bundleID) else { return nil }
         Diag.mark("rich paste: list offered as RTF and HTML")
         return rich
     }

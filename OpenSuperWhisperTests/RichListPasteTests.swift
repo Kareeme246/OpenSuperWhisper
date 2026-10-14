@@ -153,9 +153,40 @@ final class RichListPasteTests: XCTestCase {
         defer { prefs.pasteListsAsRichText = saved }
 
         prefs.pasteListsAsRichText = true
-        XCTAssertNotNil(TranscriptInserter.richText(for: shopping, into: notes))
+        XCTAssertNotNil(TranscriptInserter.richText(for: .init(shopping), into: notes, submitting: false))
         prefs.pasteListsAsRichText = false
-        XCTAssertNil(TranscriptInserter.richText(for: shopping, into: notes))
+        XCTAssertNil(TranscriptInserter.richText(for: .init(shopping), into: notes, submitting: false))
+    }
+
+    /// The rich forms go into the field with the text, so they are made from the fitted text,
+    /// not from the sentence the clipboard keeps.
+    @MainActor
+    func testTheRichTextIsMadeFromTheFittedText() throws {
+        let prefs = AppPreferences.shared
+        let saved = prefs.pasteListsAsRichText
+        defer { prefs.pasteListsAsRichText = saved }
+        prefs.pasteListsAsRichText = true
+
+        let prepared = TranscriptInserter.Prepared(fitted: " we need:\n- bread\n- chips",
+                                                   standalone: "We need:\n- bread\n- chips")
+        let rich = try XCTUnwrap(TranscriptInserter.richText(for: prepared, into: notes, submitting: false))
+        let html = String(decoding: rich.html, as: UTF8.self)
+        XCTAssertTrue(html.contains("&nbsp;we need:"), html)
+        XCTAssertFalse(html.contains("We need:"), html)
+    }
+
+    /// With Return pressed after the paste, the caret would sit in the last item of a real list,
+    /// where a rich editor makes a new bullet instead of sending.
+    @MainActor
+    func testAPasteThatReturnFollowsStaysPlain() {
+        let prefs = AppPreferences.shared
+        let saved = prefs.pasteListsAsRichText
+        defer { prefs.pasteListsAsRichText = saved }
+        prefs.pasteListsAsRichText = true
+
+        XCTAssertNil(TranscriptInserter.richText(for: .init(shopping), into: "com.tinyspeck.slackmacgap",
+                                                 submitting: true))
+        XCTAssertNil(TranscriptInserter.richText(for: .init(shopping), into: nil, submitting: false))
     }
 
     // MARK: - On the lazy paste item (#162)
