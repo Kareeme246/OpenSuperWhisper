@@ -41,7 +41,7 @@ struct TextAIInsertionGroup: View {
                 }
             }
             SettingRow("Warn when no field is focused",
-                       hint: "Shows “Copied, press ⌘V” when no text field has the focus.") {
+                       hint: "Shows “Copied, press ⌘V” when no text field has the focus, and says so when a paste doesn’t land.") {
                 SSwitch(isOn: $viewModel.notifyWhenNoPasteTarget)
             }
             SettingRow("“press enter” sends",

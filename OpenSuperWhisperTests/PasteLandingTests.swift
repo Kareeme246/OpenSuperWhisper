@@ -203,7 +203,18 @@ final class PasteLandingTests: XCTestCase {
         XCTAssertEqual(pasteboard.string(forType: .string), "original")
     }
 
-    // MARK: - Timing
+    // MARK: - Policy
+
+    func testWhereAMissedPasteLeavesTheClipboard() {
+        XCTAssertEqual(TranscriptInserter.afterMissedPaste(keepOnClipboard: true, pasteLastBound: false),
+                       .transcription)
+        XCTAssertEqual(TranscriptInserter.afterMissedPaste(keepOnClipboard: true, pasteLastBound: true),
+                       .transcription)
+        XCTAssertEqual(TranscriptInserter.afterMissedPaste(keepOnClipboard: false, pasteLastBound: true),
+                       .previousContents)
+        XCTAssertEqual(TranscriptInserter.afterMissedPaste(keepOnClipboard: false, pasteLastBound: false),
+                       .transientTranscription)
+    }
 
     func testMissedPasteDeadlineNeverCutsTheSetDelayShort() {
         let prefs = AppPreferences.shared
@@ -215,5 +226,9 @@ final class PasteLandingTests: XCTestCase {
                        ClipboardUtil.PasteTiming.missedPasteDeadline, accuracy: 0.0001)
         prefs.clipboardRestoreDelayMs = 2000
         XCTAssertEqual(ClipboardUtil.PasteTiming.current.deadline, 2, accuracy: 0.0001)
+    }
+
+    func testMissedPasteNoticeNamesTheKeys() {
+        XCTAssertTrue(TranscriptInserter.missedPasteNotice(retryKeys: "⌃⌘V").contains("⌃⌘V"))
     }
 }
