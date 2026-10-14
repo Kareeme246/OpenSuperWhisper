@@ -108,6 +108,21 @@ enum TranscriptInserter {
         unlandedPaste = nil
     }
 
+    /// Keeps a dictation that has nowhere to go: the app it was dictated into quit, or would not
+    /// come back to the front, before the text was ready (#164). It is never inserted into
+    /// whatever is in front instead, which is the wrong field by definition. The paste-last
+    /// shortcut reaches it either way; the clipboard gets it only when the user is told, or keeps
+    /// dictations there anyway, so a silent fallback never replaces what they had copied (#44).
+    @MainActor
+    static func holdUndelivered(_ text: String, onClipboard: Bool,
+                                pasteboard: NSPasteboard = .general) {
+        noteNewerTranscription()
+        unlandedPaste = text
+        if onClipboard {
+            ClipboardUtil.copyToClipboard(text, to: pasteboard)
+        }
+    }
+
     /// Pastes through the clipboard and watches whether the app in front took the text.
     @MainActor
     private static func pasteThroughClipboard(_ text: String, keepOnClipboard: Bool) {

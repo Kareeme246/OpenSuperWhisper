@@ -53,6 +53,9 @@ final class RecordingContext {
     /// and the focus may have left the field entirely. Kept in memory only: it is the contents
     /// of someone's document and it has no business being written to disk.
     private(set) var focusedText: String?
+    /// The field that had the focus when recording started, so the text can go back to it if
+    /// the user clicks elsewhere while it is transcribed (#164).
+    private(set) var focusTarget: FocusTarget?
     private init() {}
 
     func update(appName: String?, bundleID: String?, host: String? = nil,
@@ -79,7 +82,14 @@ final class RecordingContext {
         guard let front = NSWorkspace.shared.frontmostApplication,
               let bundle = front.bundleIdentifier,
               bundle != Bundle.main.bundleIdentifier
-        else { return }
+        else {
+            // The rest of the context is kept for the model rules, but a field left over from
+            // an earlier dictation is not where this one started: dictating into our own window
+            // must not send the text back to another app.
+            focusTarget = nil
+            return
+        }
+        focusTarget = AppPreferences.shared.pasteIntoOriginalField ? FocusTarget.capture(front) : nil
         let url = SourceCapture.browserURL(bundleID: bundle)
         let host = SourceCapture.host(of: url)
         let title = SourceCapture.focusedWindowTitle()

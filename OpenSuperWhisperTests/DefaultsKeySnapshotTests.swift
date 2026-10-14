@@ -71,6 +71,7 @@ final class DefaultsKeySnapshotTests: XCTestCase {
         "noSpeechThreshold",
         "notifyWhenNoPasteTarget",
         "pasteInsteadOfTyping",
+        "pasteIntoOriginalField",
         "pauseMediaOnRecord",
         "playSoundOnRecordStart",
         "postRecordHookCommand",
@@ -253,6 +254,7 @@ final class DefaultsKeySnapshotTests: XCTestCase {
         assertWrites("clipboardRestoreDelayMs") { prefs.clipboardRestoreDelayMs = 900 }
         assertWrites("pasteInsteadOfTyping") { prefs.pasteInsteadOfTyping = false }
         assertWrites("notifyWhenNoPasteTarget") { prefs.notifyWhenNoPasteTarget = false }
+        assertWrites("pasteIntoOriginalField") { prefs.pasteIntoOriginalField = false }
         assertWrites("submitOnVoiceCommand") { prefs.submitOnVoiceCommand = true }
         assertWrites("stopPhrase") { prefs.stopPhrase = "over and out" }
         assertWrites("stopPhraseSubmits") { prefs.stopPhraseSubmits = true }
@@ -415,6 +417,7 @@ final class DefaultsKeySnapshotTests: XCTestCase {
         XCTAssertEqual(prefs.clipboardRestoreDelayMs, 500)
         XCTAssertEqual(prefs.pasteInsteadOfTyping, true)
         XCTAssertEqual(prefs.notifyWhenNoPasteTarget, true)
+        XCTAssertEqual(prefs.pasteIntoOriginalField, true)
         XCTAssertEqual(prefs.submitOnVoiceCommand, false)
         XCTAssertEqual(prefs.stopPhrase, "")
         XCTAssertEqual(prefs.stopPhraseSubmits, false)
