@@ -18250,6 +18250,26 @@
           }
         }
       }
+    },
+    "Back to the field you started in": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revenir au champ de départ"
+          }
+        }
+      }
+    },
+    "If you click elsewhere while the dictation is transcribed, the text still goes where you were when you started. Turn it off to have it land wherever you are by then.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si vous cliquez ailleurs pendant la transcription, le texte va quand même là où vous étiez au début. Désactivez pour qu’il arrive là où vous êtes à ce moment-là."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

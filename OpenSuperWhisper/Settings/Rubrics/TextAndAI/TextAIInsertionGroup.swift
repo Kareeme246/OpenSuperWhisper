@@ -13,6 +13,13 @@ struct TextAIInsertionGroup: View {
             SettingRow("Paste automatically", hint: "Into the app where your cursor is.") {
                 SSwitch(isOn: $viewModel.autoPasteTranscription)
             }
+            if viewModel.autoPasteTranscription {
+                SettingRow("Back to the field you started in",
+                           hint: "If you click elsewhere while the dictation is transcribed, the text still goes where you were when you started. Turn it off to have it land wherever you are by then.",
+                           advanced: true, indented: true) {
+                    SSwitch(isOn: $viewModel.pasteIntoOriginalField)
+                }
+            }
             SettingRow("Method",
                        hint: "Paste sends one ⌘V, which suits Electron apps and Messages. Typing sends keystrokes and leaves the clipboard alone. Per-app exceptions override this.",
                        advanced: true) {

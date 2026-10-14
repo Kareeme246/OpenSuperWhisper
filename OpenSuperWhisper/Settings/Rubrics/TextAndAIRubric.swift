@@ -28,6 +28,8 @@ struct TextAndAIRubric: View {
               keywords: "fallback raw si l'IA échoue texte brut"),
         entry("Default style", keywords: "style Pro par défaut"),
         entry("Paste automatically", keywords: "auto-paste insert coller automatiquement"),
+        entry("Back to the field you started in", advanced: true,
+              keywords: "focus original field window app return revenir champ de départ fenêtre"),
         entry("Method", advanced: true, keywords: "paste typing keystrokes méthode coller simuler la frappe"),
         entry("Typing pace", advanced: true, keywords: "keystroke delay rythme de frappe"),
         entry("Also keep it on the clipboard", keywords: "copy clipboard presse-papiers copier garder"),

@@ -791,6 +791,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var pasteIntoOriginalField: Bool {
+        didSet {
+            AppPreferences.shared.pasteIntoOriginalField = pasteIntoOriginalField
+        }
+    }
+
     @Published var submitOnVoiceCommand: Bool {
         didSet {
             AppPreferences.shared.submitOnVoiceCommand = submitOnVoiceCommand
@@ -1007,6 +1013,7 @@ class SettingsViewModel: ObservableObject {
         self.autoPasteTranscription = prefs.autoPasteTranscription
         self.pasteInsteadOfTyping = prefs.pasteInsteadOfTyping
         self.notifyWhenNoPasteTarget = prefs.notifyWhenNoPasteTarget
+        self.pasteIntoOriginalField = prefs.pasteIntoOriginalField
         self.submitOnVoiceCommand = prefs.submitOnVoiceCommand
         self.stopPhrase = prefs.stopPhrase
         self.stopPhraseSubmits = prefs.stopPhraseSubmits
