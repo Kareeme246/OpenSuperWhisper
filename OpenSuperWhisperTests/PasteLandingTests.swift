@@ -203,17 +203,78 @@ final class PasteLandingTests: XCTestCase {
         XCTAssertEqual(pasteboard.string(forType: .string), "original")
     }
 
+    /// "Copy to clipboard" switched off while a paste that kept no snapshot is still pending:
+    /// the pasteboard then holds that paste's text, and saving it as the previous contents would
+    /// put dictated text back on the clipboard. With nothing saved, the clipboard is left empty.
+    func testATakeoverNeverSavesTheEarlierTranscriptionAsThePreviousContents() {
+        ClipboardUtil.copyToClipboard("original", to: pasteboard)
+        let timing = ClipboardUtil.PasteTiming(hold: 0.05, settle: 0.05, deadline: 0.15)
+
+        ClipboardUtil.borrowForPaste("A", on: pasteboard,
+                                     afterLanding: .transcription, afterMissing: .transcription,
+                                     timing: timing, paste: {})
+        ClipboardUtil.borrowForPaste("B", on: pasteboard, timing: timing,
+                                     paste: { _ = readLikeTheTargetApp() })
+        waitFor(0.4)
+
+        XCTAssertNil(pasteboard.string(forType: .string), "dictated text came back as the user's own")
+    }
+
+    // MARK: - Late and off-main reads
+
+    /// Once a miss is settled the clipboard no longer holds the borrowed item, so a busy app
+    /// reading late gets the restored contents and the outcome stays the one already given.
+    func testAReadAfterTheDeadlineIsNotASecondOutcome() {
+        ClipboardUtil.copyToClipboard("original", to: pasteboard)
+        var outcomes: [ClipboardUtil.PasteOutcome] = []
+
+        ClipboardUtil.borrowForPaste("transcription", on: pasteboard,
+                                     timing: .init(hold: 0.05, settle: 0.05, deadline: 0.15),
+                                     paste: {}, outcome: { outcomes.append($0) })
+        waitFor(0.3)
+        XCTAssertEqual(readLikeTheTargetApp(), "original")
+        waitFor(0.3)
+
+        XCTAssertEqual(outcomes, [.missed])
+    }
+
+    /// A read from another thread of this process runs the provider on that thread; the borrow
+    /// still hears of it on the main thread, where its timers live.
+    func testAReadOffTheMainThreadIsCountedOnTheMainThread() {
+        ClipboardUtil.copyToClipboard("original", to: pasteboard)
+        var outcomes: [ClipboardUtil.PasteOutcome] = []
+        var reportedOnMain: [Bool] = []
+        let board = pasteboard!
+
+        ClipboardUtil.borrowForPaste("transcription", on: board,
+                                     timing: .init(hold: 0.05, settle: 0.05, deadline: 1),
+                                     paste: {
+            DispatchQueue.global().async { _ = board.string(forType: .string) }
+        }, outcome: {
+            outcomes.append($0)
+            reportedOnMain.append(Thread.isMainThread)
+        })
+        waitFor(0.6)
+
+        XCTAssertEqual(outcomes, [.landed])
+        XCTAssertEqual(reportedOnMain, [true])
+        XCTAssertEqual(pasteboard.string(forType: .string), "original")
+    }
+
     // MARK: - Policy
 
     func testWhereAMissedPasteLeavesTheClipboard() {
-        XCTAssertEqual(TranscriptInserter.afterMissedPaste(keepOnClipboard: true, pasteLastBound: false),
-                       .transcription)
-        XCTAssertEqual(TranscriptInserter.afterMissedPaste(keepOnClipboard: true, pasteLastBound: true),
-                       .transcription)
-        XCTAssertEqual(TranscriptInserter.afterMissedPaste(keepOnClipboard: false, pasteLastBound: true),
-                       .previousContents)
-        XCTAssertEqual(TranscriptInserter.afterMissedPaste(keepOnClipboard: false, pasteLastBound: false),
-                       .transientTranscription)
+        func afterMissing(keep: Bool, bound: Bool, warn: Bool) -> ClipboardUtil.Afterwards {
+            TranscriptInserter.afterMissedPaste(keepOnClipboard: keep, pasteLastBound: bound,
+                                                warnWhenMissed: warn)
+        }
+        XCTAssertEqual(afterMissing(keep: true, bound: false, warn: true), .transcription)
+        XCTAssertEqual(afterMissing(keep: true, bound: true, warn: true), .transcription)
+        XCTAssertEqual(afterMissing(keep: false, bound: true, warn: true), .previousContents)
+        XCTAssertEqual(afterMissing(keep: false, bound: false, warn: true), .transientTranscription)
+        // Nobody would say the clipboard had been swapped for the words, so it isn't (#44).
+        XCTAssertEqual(afterMissing(keep: false, bound: false, warn: false), .previousContents)
+        XCTAssertEqual(afterMissing(keep: true, bound: false, warn: false), .transcription)
     }
 
     func testMissedPasteDeadlineNeverCutsTheSetDelayShort() {

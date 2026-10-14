@@ -81,14 +81,18 @@ extension ClipboardUtil {
                                timing: PasteTiming = .current,
                                paste: () -> Void,
                                outcome: @escaping (PasteOutcome) -> Void = { _ in }) {
-        let needsSnapshot = afterLanding == .previousContents || afterMissing == .previousContents
-        var saved: Snapshot?
+        let saved: Snapshot?
         if let pending = pendingBorrows.removeValue(forKey: pasteboard.name) {
             pending.cancel()
+            // Never a fresh snapshot here, even when the earlier borrow kept none ("Copy to
+            // clipboard" switched off in between): reading the pasteboard would fire that borrow's
+            // provider and save its transcription as the "previous contents". Without a snapshot
+            // a restore leaves the clipboard empty, which at least isn't dictated text.
             saved = pending.saved
-        }
-        if saved == nil && needsSnapshot {
+        } else if afterLanding == .previousContents || afterMissing == .previousContents {
             saved = snapshot(of: pasteboard)
+        } else {
+            saved = nil
         }
 
         let watcher = PasteReadWatcher(text: text)
@@ -106,7 +110,7 @@ extension ClipboardUtil {
     /// another is pending must NOT snapshot — the pasteboard holds the previous borrow's
     /// transcription, and restoring that later would overwrite the user's contents with dictated
     /// text, the very thing "Copy to clipboard" off exists to prevent. Main-thread only, like every
-    /// caller, the timers and the pasteboard's requests for the text.
+    /// caller, the timers and the read notices, which the watcher brings over to it.
     private static var pendingBorrows: [NSPasteboard.Name: Borrow] = [:]
 
     /// Writes one item whose text is supplied on request, with the transient markers set
@@ -209,9 +213,12 @@ extension ClipboardUtil {
 }
 
 /// Supplies the borrowed text the moment someone asks the pasteboard for it, and says so.
-/// AppKit calls it on the main thread, from the run loop, whichever process is reading.
+/// Another process's read is served on the main thread, from the run loop, but a read from inside
+/// this process runs the provider on the reader's own thread (the SDK marks it nonisolated). The
+/// borrow's state and timers are main-thread only, so the news is carried over there.
 private final class PasteReadWatcher: NSObject, NSPasteboardItemDataProvider {
     let text: String
+    /// Set once, before the text is offered, and only read afterwards.
     var onRead: (() -> Void)?
 
     init(text: String) {
@@ -221,7 +228,12 @@ private final class PasteReadWatcher: NSObject, NSPasteboardItemDataProvider {
     func pasteboard(_ pasteboard: NSPasteboard?, item: NSPasteboardItem,
                     provideDataForType type: NSPasteboard.PasteboardType) {
         item.setString(text, forType: type)
-        onRead?()
+        guard let onRead else { return }
+        if Thread.isMainThread {
+            onRead()
+        } else {
+            DispatchQueue.main.async(execute: onRead)
+        }
     }
 
     func pasteboardFinishedWithDataProvider(_ pasteboard: NSPasteboard) {}
