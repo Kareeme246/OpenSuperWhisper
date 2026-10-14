@@ -1,0 +1,60 @@
+#if DEBUG
+import KeyboardShortcuts
+import SwiftUI
+
+/// Onboarding as each kind of Mac sees it, staged: which models are on disk, what Apple's
+/// speech model offers and the permissions are all made up, so none of this Mac's is read.
+@MainActor
+extension UISnapshotProbe {
+    static let onboardingScreens: [String: () -> AnyView] = [
+        "onboarding-model-apple-speech": { onboarding(.model, appleSpeech: .installed) },
+        "onboarding-model-apple-speech-system-download": { onboarding(.model, appleSpeech: .systemDownload) },
+        "onboarding-model-apple-speech-large-text": {
+            onboarding(.model, appleSpeech: .installed, textScale: TextScale.maximum)
+        },
+        "onboarding-model-no-apple-speech": { onboarding(.model, appleSpeech: .unavailable) },
+        "onboarding-model-reinstall": { onboarding(.model, appleSpeech: .installed, downloadedUltra: true) },
+        "onboarding-shortcut-custom": { onboarding(.shortcut, custom: controlOptionD) },
+        "onboarding-shortcut-custom-modifier": { onboarding(.shortcut, custom: .modifier(.rightCommand)) },
+        "onboarding-shortcut-custom-empty": { onboarding(.shortcut, choice: .custom) },
+        "onboarding-shortcut-custom-large-text": {
+            onboarding(.shortcut, custom: .modifier(.rightCommand), textScale: TextScale.maximum)
+        },
+        "onboarding-permissions-custom-modifier": { onboarding(.permissions, custom: .modifier(.rightCommand)) },
+        "onboarding-first-try-keycaps": { onboarding(.firstTry, choice: .keyCombination) },
+        "onboarding-first-try-keycaps-modifier": { onboarding(.firstTry, choice: .rightOption) },
+        "onboarding-first-try-keycaps-custom": { onboarding(.firstTry, custom: controlOptionD) },
+        "onboarding-first-try-keycaps-large-text": {
+            onboarding(.firstTry, custom: controlOptionD, textScale: TextScale.maximum)
+        },
+    ]
+
+    private static let controlOptionD = RecordingTrigger.keyCombo(.init(.d, modifiers: [.control, .option]))
+
+    private static func onboarding(_ step: OnboardingStep, appleSpeech: AppleSpeechOffer = .unavailable,
+                                   downloadedUltra: Bool = false,
+                                   choice: OnboardingShortcutOption = .keyCombination,
+                                   custom: RecordingTrigger? = nil,
+                                   textScale: Double = TextScale.default) -> AnyView {
+        PermissionsManager.snapshotGrantsAll = true
+        // A fresh install's list, whatever the previous screen of the run recorded.
+        let fresh = KeyboardShortcuts.Name.toggleRecord.defaultShortcut.map { RecordingTrigger.keyCombo($0) }
+        AppPreferences.shared.recordingTriggers = RecordingTriggerSet(triggers: fresh.map { [$0] } ?? []).json
+        AppPreferences.shared.modifierOnlyHotkey = ModifierKey.none.rawValue
+        let language = ProcessInfo.processInfo.environment["OSW_SNAPSHOT_LOCALE"] ?? "en"
+        let system = OnboardingSystem.staged(
+            downloaded: { type in
+                if case .parakeet("ultra") = type { return downloadedUltra }
+                return false
+            },
+            appleSpeech: appleSpeech,
+            appLanguage: language)
+        let viewModel = OnboardingViewModel(system: system)
+        viewModel.selectedShortcut = choice
+        if let custom { viewModel.customTrigger = custom }
+        return AnyView(OnboardingView(initialStep: step, viewModel: viewModel)
+            .environmentObject(AppState())
+            .environment(\.appTextScale, textScale))
+    }
+}
+#endif
