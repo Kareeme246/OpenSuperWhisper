@@ -7,6 +7,7 @@ import OpenSuperWhisperCore
 /// nothing to download. Parakeet stays recommended right under it, for its accuracy.
 struct OnboardingModelStep: View {
     @ObservedObject var viewModel: OnboardingViewModel
+    @Environment(\.locale) private var locale
 
     var body: some View {
         VStack(alignment: .leading, spacing: 28) {
@@ -23,7 +24,7 @@ struct OnboardingModelStep: View {
 
             if let apple = binding(for: viewModel.appleSpeechRow) {
                 OnboardingModelRow(model: apple, viewModel: viewModel,
-                                   explanation: "Built into macOS. Runs on this Mac, no account needed.",
+                                   explanation: "Apple's own model: fast, private, no account needed.",
                                    tag: ("Built into macOS", .engine))
             }
 
@@ -45,10 +46,11 @@ struct OnboardingModelStep: View {
     }
 
     private var languageMenu: some View {
-        SMenu(Text(LanguageUtil.languageNames[viewModel.selectedLanguage] ?? viewModel.selectedLanguage)) {
+        SMenu(SpokenLanguageName.text(for: viewModel.selectedLanguage, locale: locale)) {
             Picker("", selection: $viewModel.selectedLanguage) {
-                ForEach(LanguageUtil.availableLanguages, id: \.self) { code in
-                    Text(LanguageUtil.languageNames[code] ?? code).tag(code)
+                ForEach(SpokenLanguageName.sorted(LanguageUtil.availableLanguages, locale: locale),
+                        id: \.self) { code in
+                    SpokenLanguageName.text(for: code, locale: locale).tag(code)
                 }
             }
             .pickerStyle(.inline)
@@ -72,10 +74,13 @@ struct OnboardingModelStep: View {
         return $viewModel.unifiedModels[index]
     }
 
-    /// Next to Apple's model, which is already there, the case for a download is accuracy.
+    /// Next to Apple's model, which needs nothing from the app, the case for this one is
+    /// accuracy. A reinstall has it on disk already, so it promises no download.
     private func explanation(for model: OnboardingUnifiedModel) -> LocalizedStringKey {
         if viewModel.appleSpeechRow != nil {
-            return "More accurate than Apple's model. One download, then it runs on this Mac, no account needed."
+            return model.isDownloaded
+                ? "More accurate than Apple's model. Runs on this Mac, no account needed."
+                : "More accurate than Apple's model. One download, then it runs on this Mac, no account needed."
         }
         switch model.type {
         case .parakeet:
@@ -147,10 +152,9 @@ struct OnboardingModelRow: View {
                     Text(model.name)
                         .scaledFont(size: prominent ? 20 : 15, weight: prominent ? .bold : .semibold)
                         .foregroundColor(STheme.textBright)
+                    // Apple's gets no badge: the line under its name says where its language is.
                     if model.isDownloaded {
                         SBadge("Downloaded", kind: .engine)
-                    } else if model.isAppleSpeech && viewModel.appleSpeech == .installed {
-                        SBadge("On this Mac", kind: .engine)
                     }
                 }
                 Text(description)

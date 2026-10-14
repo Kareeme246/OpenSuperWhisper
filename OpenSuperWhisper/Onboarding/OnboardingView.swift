@@ -103,7 +103,7 @@ struct OnboardingView: View {
     /// does not need.
     private var subtitle: LocalizedStringKey {
         if step == .model && viewModel.appleSpeechRow != nil {
-            return "Already on your Mac, or one download away. Either way it runs here."
+            return "Built into macOS, or one download away. Either way, dictation runs on this Mac."
         }
         return step.subtitle
     }

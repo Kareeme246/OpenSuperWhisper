@@ -18251,12 +18251,12 @@
         }
       }
     },
-    "Already on your Mac, or one download away. Either way it runs here.": {
+    "Built into macOS, or one download away. Either way, dictation runs on this Mac.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Déjà sur votre Mac, ou à un téléchargement près. Dans les deux cas, tout se passe ici."
+            "value": "Intégré à macOS, ou à un téléchargement près. Dans les deux cas, la dictée tourne sur ce Mac."
           }
         }
       }
@@ -18281,12 +18281,12 @@
         }
       }
     },
-    "Built into macOS. Runs on this Mac, no account needed.": {
+    "Apple's own model: fast, private, no account needed.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Intégré à macOS. Tourne sur ce Mac, sans compte."
+            "value": "Le modèle d'Apple : rapide, privé, sans compte."
           }
         }
       }
@@ -18327,6 +18327,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Plus précis que le modèle d'Apple. Un téléchargement, puis il tourne sur ce Mac, sans compte."
+          }
+        }
+      }
+    },
+    "More accurate than Apple's model. Runs on this Mac, no account needed.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus précis que le modèle d'Apple. Tourne sur ce Mac, sans compte."
           }
         }
       }
@@ -18437,6 +18447,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "macOS télécharge votre langue à votre première dictée. Rien à télécharger dans l'app."
+          }
+        }
+      }
+    },
+    "Auto-detect": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Détection automatique"
           }
         }
       }
