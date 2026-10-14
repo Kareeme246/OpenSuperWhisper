@@ -725,10 +725,11 @@ final class AppPreferences {
 
     /// Paste a dictated list as real bullets into the apps known to take rich text (#166).
     ///
-    /// On by default: it changes nothing unless the text already has "- " or "1. " lines, only
-    /// in apps on `RichListPaste.richTextApps`, and the plain lines stay on the pasteboard for
-    /// any field there that reads text only.
-    @UserDefault(key: "pasteListsAsRichText", defaultValue: true)
+    /// Off by default until it has been checked by hand in Notes, Pages and Word. The RTF those
+    /// apps read names a font (the writer's Helvetica 12 pt, for the lines around the list too),
+    /// and an app that keeps the source formatting on paste would show the dictation in it rather
+    /// than in the field's own font, which a plain paste always takes.
+    @UserDefault(key: "pasteListsAsRichText", defaultValue: false)
     var pasteListsAsRichText: Bool
 
     /// When on, a trailing "press enter" in the dictation is removed from the text and a Return

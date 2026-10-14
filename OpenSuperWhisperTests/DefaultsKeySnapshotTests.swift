@@ -258,7 +258,7 @@ final class DefaultsKeySnapshotTests: XCTestCase {
         assertWrites("notifyWhenNoPasteTarget") { prefs.notifyWhenNoPasteTarget = false }
         assertWrites("pasteIntoOriginalField") { prefs.pasteIntoOriginalField = false }
         assertWrites("matchTextAroundCaret") { prefs.matchTextAroundCaret = true }
-        assertWrites("pasteListsAsRichText") { prefs.pasteListsAsRichText = false }
+        assertWrites("pasteListsAsRichText") { prefs.pasteListsAsRichText = true }
         assertWrites("submitOnVoiceCommand") { prefs.submitOnVoiceCommand = true }
         assertWrites("stopPhrase") { prefs.stopPhrase = "over and out" }
         assertWrites("stopPhraseSubmits") { prefs.stopPhraseSubmits = true }
@@ -423,7 +423,7 @@ final class DefaultsKeySnapshotTests: XCTestCase {
         XCTAssertEqual(prefs.notifyWhenNoPasteTarget, true)
         XCTAssertEqual(prefs.pasteIntoOriginalField, true)
         XCTAssertEqual(prefs.matchTextAroundCaret, false)
-        XCTAssertEqual(prefs.pasteListsAsRichText, true)
+        XCTAssertEqual(prefs.pasteListsAsRichText, false)
         XCTAssertEqual(prefs.submitOnVoiceCommand, false)
         XCTAssertEqual(prefs.stopPhrase, "")
         XCTAssertEqual(prefs.stopPhraseSubmits, false)

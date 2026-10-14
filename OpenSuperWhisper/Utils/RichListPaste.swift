@@ -180,7 +180,9 @@ enum RichListPaste {
 
     /// The lists as the text system stores them: each item a paragraph carrying its `NSTextList`,
     /// with the marker written out between tabs, which is what the RTF writer turns into a list.
-    /// No font is set, so the RTF carries the writer's default rather than one picked here.
+    /// No font is set, but the writer still names its default, Helvetica 12 pt, for the whole
+    /// text: an app that keeps the source formatting shows the paste in it rather than in the
+    /// field's font. That is why `pasteListsAsRichText` starts off.
     static func rtf(_ blocks: [Block]) -> Data? {
         let paragraphs = blocks.flatMap { block -> [(String, NSParagraphStyle?)] in
             switch block {
