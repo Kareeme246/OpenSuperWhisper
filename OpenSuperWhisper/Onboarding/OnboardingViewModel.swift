@@ -25,18 +25,14 @@ class OnboardingViewModel: ObservableObject {
         }
     }
     
-    @Published var selectedShortcut: OnboardingShortcutOption {
-        didSet { applyShortcut() }
-    }
+    /// Only the card on screen: the choice reaches the app when the step is left (see
+    /// `applyShortcutChoice`), since re-arming the key monitors on every click made the cards lag.
+    @Published var selectedShortcut: OnboardingShortcutOption
 
     /// What the Custom card recorded. Recording something picks that card.
     @Published var customTrigger: RecordingTrigger? {
         didSet {
-            if customTrigger != nil && selectedShortcut != .custom {
-                selectedShortcut = .custom
-            } else {
-                applyShortcut()
-            }
+            if customTrigger != nil && selectedShortcut != .custom { selectedShortcut = .custom }
         }
     }
 
@@ -45,6 +41,8 @@ class OnboardingViewModel: ObservableObject {
     let combination: RecordingTrigger?
     /// The recorded trigger last written to the list, taken out again when the choice changes.
     var appliedCustom: RecordingTrigger?
+    /// What the app listens to now: the choice it opened with, until a different one is applied.
+    var appliedChoice = OnboardingShortcutChoice(option: .keyCombination, custom: nil)
 
     @Published var unifiedModels: [OnboardingUnifiedModel] = []
     @Published var selectedModelId: UUID?
@@ -88,6 +86,7 @@ class OnboardingViewModel: ObservableObject {
         } else {
             self.selectedShortcut = currentHotkey == .rightOption ? .rightOption : .keyCombination
         }
+        appliedChoice = pendingChoice
         
         initializeUnifiedModels()
         Task { @MainActor in await refreshAppleSpeech() }

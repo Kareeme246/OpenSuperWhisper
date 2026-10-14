@@ -215,6 +215,7 @@ final class OnboardingDefaultsTests: XCTestCase {
         let viewModel = OnboardingViewModel(system: .staged())
         viewModel.customTrigger = .modifier(.rightCommand)
         XCTAssertEqual(viewModel.selectedShortcut, .custom)
+        viewModel.stepDidChange(from: .shortcut)
         XCTAssertEqual(prefs.submitModifierOnlyHotkey, ModifierKey.none.rawValue)
     }
 
@@ -225,6 +226,7 @@ final class OnboardingDefaultsTests: XCTestCase {
         prefs.submitModifierOnlyHotkey = ModifierKey.rightCommand.rawValue
         let viewModel = OnboardingViewModel(system: .staged())
         viewModel.selectedShortcut = .rightOption
+        viewModel.stepDidChange(from: .shortcut)
         XCTAssertEqual(prefs.submitModifierOnlyHotkey, ModifierKey.rightCommand.rawValue)
     }
 

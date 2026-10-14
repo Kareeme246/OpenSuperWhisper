@@ -56,7 +56,12 @@ struct OnboardingView: View {
         .background(STheme.windowBg.ignoresSafeArea())
         .ignoresSafeArea(.container, edges: .top)
         .tint(STheme.accent)
-        .onChange(of: step) { _, newStep in furthest = max(furthest, newStep) }
+        .onChange(of: step) { oldStep, newStep in
+            viewModel.stepDidChange(from: oldStep)
+            furthest = max(furthest, newStep)
+        }
+        // Covers the window being closed too, which no button of the view sees.
+        .onDisappear { viewModel.onboardingWillClose() }
         .onReceive(inputMonitoringPoll) { _ in
             guard step == .permissions else { return }
             inputMonitoringGranted = Self.readInputMonitoring()
@@ -217,6 +222,7 @@ struct OnboardingView: View {
     }
 
     private func finish() {
+        viewModel.onboardingWillClose()
         appState.hasCompletedOnboarding = true
     }
 }
