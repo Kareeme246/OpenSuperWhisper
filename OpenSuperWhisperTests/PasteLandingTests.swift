@@ -183,9 +183,9 @@ final class PasteLandingTests: XCTestCase {
 
     // MARK: - Overlap
 
-    /// Only the borrow that ends reports: the earlier one's text was replaced before it could
-    /// be told whether it landed.
-    func testASupersededBorrowReportsNothing() {
+    /// Only the borrow that ends says whether it landed: the earlier one's text was replaced
+    /// before it could be told, and it hears only that it was taken over.
+    func testASupersededBorrowIsOnlyToldItWasTakenOver() {
         ClipboardUtil.copyToClipboard("original", to: pasteboard)
         var first: [ClipboardUtil.PasteOutcome] = []
         var second: [ClipboardUtil.PasteOutcome] = []
@@ -198,7 +198,7 @@ final class PasteLandingTests: XCTestCase {
                                      outcome: { second.append($0) })
         waitFor(0.4)
 
-        XCTAssertEqual(first, [])
+        XCTAssertEqual(first, [.superseded])
         XCTAssertEqual(second, [.landed])
         XCTAssertEqual(pasteboard.string(forType: .string), "original")
     }
