@@ -131,26 +131,47 @@ final class TextAroundCaretTests: XCTestCase {
 
     func testSettingOffNeverReadsTheField() {
         var reads = 0
-        let text = TranscriptInserter.prepared("Tomorrow at noon.", fitToField: false,
+        let text = TranscriptInserter.prepared("Tomorrow at noon.", fitToField: false, language: "en",
                                                readField: { reads += 1; return TextAroundCaret(before: "Meet ") })
-        XCTAssertEqual(text, "Tomorrow at noon. ")
+        XCTAssertEqual(text, .init("Tomorrow at noon. "))
         XCTAssertEqual(reads, 0)
     }
 
     func testUnreadableFieldGetsTheTextAsBefore() {
-        XCTAssertEqual(TranscriptInserter.prepared("Tomorrow at noon.", fitToField: true, readField: { nil }),
-                       "Tomorrow at noon. ")
+        XCTAssertEqual(TranscriptInserter.prepared("Tomorrow at noon.", fitToField: true, language: "en",
+                                                   readField: { nil }),
+                       .init("Tomorrow at noon. "))
     }
 
     func testReadableFieldGetsTheTextFitted() {
         let field = TextAroundCaret(before: "The review is", after: " if that suits you.")
-        XCTAssertEqual(TranscriptInserter.prepared("Tomorrow at noon.", fitToField: true, readField: { field }),
-                       " tomorrow at noon")
+        XCTAssertEqual(TranscriptInserter.prepared("Tomorrow at noon.", fitToField: true, language: "en",
+                                                   readField: { field }),
+                       .init(fitted: " tomorrow at noon", standalone: "Tomorrow at noon. "))
+    }
+
+    func testGermanKeepsItsCapitalsButStillLosesThePeriod() {
+        let field = TextAroundCaret(before: "Ich habe den", after: " schon verschoben.")
+        XCTAssertEqual(TranscriptInserter.prepared("Termin morgen.", fitToField: true, language: "de",
+                                                   readField: { field }).fitted,
+                       " Termin morgen")
+    }
+
+    func testAutoDetectGuessesTheLanguageFromTheFieldAndTheDictation() {
+        let german = TextAroundCaret(before: "Wir haben gestern lange darüber gesprochen, und ich habe den ")
+        XCTAssertEqual(TranscriptInserter.prepared("Termin auf morgen verschoben.", fitToField: true,
+                                                   language: "auto", readField: { german }).fitted,
+                       "Termin auf morgen verschoben.")
+        let english = TextAroundCaret(before: "We talked about it for a long time yesterday, and I moved the ")
+        XCTAssertEqual(TranscriptInserter.prepared("Meeting to tomorrow.", fitToField: true,
+                                                   language: nil, readField: { english }).fitted,
+                       "meeting to tomorrow.")
     }
 
     func testFittingKeepsTheRunOnSentenceFix() {
         let field = TextAroundCaret(before: "Done. ")
-        XCTAssertEqual(TranscriptInserter.prepared("It works.Using it now.", fitToField: true, readField: { field }),
+        XCTAssertEqual(TranscriptInserter.prepared("It works.Using it now.", fitToField: true, language: "en",
+                                                   readField: { field }).fitted,
                        "It works. Using it now.")
     }
 
@@ -159,11 +180,13 @@ final class TextAroundCaretTests: XCTestCase {
         let field = TextAroundCaret(before: "Then ")
 
         prefs.customDictionaryEnabled = true
-        XCTAssertEqual(TranscriptInserter.prepared("Kubernetes restarted.", fitToField: true, readField: { field }),
+        XCTAssertEqual(TranscriptInserter.prepared("Kubernetes restarted.", fitToField: true, language: "en",
+                                                   readField: { field }).fitted,
                        "Kubernetes restarted.")
 
         prefs.customDictionaryEnabled = false
-        XCTAssertEqual(TranscriptInserter.prepared("Kubernetes restarted.", fitToField: true, readField: { field }),
+        XCTAssertEqual(TranscriptInserter.prepared("Kubernetes restarted.", fitToField: true, language: "en",
+                                                   readField: { field }).fitted,
                        "kubernetes restarted.")
     }
 }

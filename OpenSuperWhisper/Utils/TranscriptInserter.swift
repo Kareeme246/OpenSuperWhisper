@@ -2,6 +2,7 @@ import AppKit
 import CoreGraphics
 import Foundation
 import KeyboardShortcuts
+import NaturalLanguage
 import OpenSuperWhisperCore
 
 /// The single place that decides *how* a finished transcription reaches the focused app:
@@ -11,10 +12,31 @@ import OpenSuperWhisperCore
 /// explicit, user-triggered insertion, so the two can't drift apart.
 enum TranscriptInserter {
 
+    /// A transcription ready to go out, in the two forms it takes (#163).
+    struct Prepared: Equatable {
+        /// What goes in at the caret: fitted to the field when that is on and the field could
+        /// be read, otherwise the same as `standalone`.
+        let fitted: String
+        /// The text as a sentence of its own, before any fitting. What the clipboard keeps and
+        /// what a missed paste holds: the paste-last shortcut may take it to a sentence start,
+        /// where a lowercase start and a dropped period would be wrong, and fits it again there.
+        let standalone: String
+
+        init(fitted: String, standalone: String) {
+            self.fitted = fitted
+            self.standalone = standalone
+        }
+
+        init(_ text: String) {
+            self.init(fitted: text, standalone: text)
+        }
+    }
+
     /// Inserts `text` into the focused app.
     ///
     /// - Parameters:
-    ///   - text: Post-processed transcription, ready to insert.
+    ///   - text: Post-processed transcription, ready to insert; only its fitted form goes into
+    ///     the field.
     ///   - honorAutoPastePreference: `true` for automatic insertion after a dictation, where the
     ///     "Auto-paste transcription" preference decides whether anything is inserted at all.
     ///     `false` when the user explicitly asked for this insertion — the request itself is the
@@ -27,8 +49,9 @@ enum TranscriptInserter {
     ///   caller can leave the text on the clipboard and notify ⌘V.
     @MainActor
     @discardableResult
-    static func insert(_ text: String, honorAutoPastePreference: Bool,
+    static func insert(_ prepared: Prepared, honorAutoPastePreference: Bool,
                        targetBundleID: String? = nil) -> Bool {
+        let text = prepared.fitted
         let prefs = AppPreferences.shared
         let rule = AppInsertionRule.rule(for: targetBundleID, in: prefs.appInsertionRules)
         noteNewerTranscription()
@@ -40,7 +63,7 @@ enum TranscriptInserter {
         // Optional, independent clipboard stash. A paste leaves the text there itself once the
         // app has taken it; stashing first as well would hand clipboard histories a second copy.
         if prefs.autoCopyToClipboard && !pasting {
-            ClipboardUtil.copyToClipboard(text)
+            ClipboardUtil.copyToClipboard(prepared.standalone)
         }
 
         guard inserting else { return false }
@@ -66,7 +89,7 @@ enum TranscriptInserter {
             // nothing looked exactly like an insertion that never happened.
             log(mechanism: "paste", chunks: 1, pause: 0,
                 pasteKeyCode: KeyboardLayoutProvider.shared.pasteKeyCode())
-            pasteThroughClipboard(text, keepOnClipboard: prefs.autoCopyToClipboard)
+            pasteThroughClipboard(prepared, keepOnClipboard: prefs.autoCopyToClipboard)
             return false
         }
 
@@ -76,7 +99,7 @@ enum TranscriptInserter {
             && Diag.measure("focusedElementIsEditable") { FocusUtils.focusedElementIsEditable() } == false
         if targetMissing {
             if !prefs.autoCopyToClipboard {
-                ClipboardUtil.copyToClipboard(text)
+                ClipboardUtil.copyToClipboard(prepared.standalone)
             }
             return true
         }
@@ -103,23 +126,38 @@ enum TranscriptInserter {
     /// - Parameters:
     ///   - fitToField: the setting is on and the text is going to be inserted. Text that only
     ///     goes to the clipboard has no caret to fit, and the field is then not read at all.
+    ///   - language: the language the text was dictated in, nil or "auto" when unknown.
     ///   - readField: the focused field, passed in so tests never read a real one.
     @MainActor
-    static func prepared(_ text: String, fitToField: Bool,
-                         readField: () -> TextAroundCaret? = TextAroundCaret.focused) -> String {
+    static func prepared(_ text: String, fitToField: Bool, language: String?,
+                         readField: () -> TextAroundCaret? = TextAroundCaret.focused) -> Prepared {
         let processed = IndicatorViewModel.applyPostProcessing(text)
-        guard fitToField else { return processed }
+        guard fitToField else { return Prepared(processed) }
         guard let field = Diag.measure("TextAroundCaret.focused", readField) else {
             Diag.mark("caret match: field unreadable, text left as is")
-            return processed
+            return Prepared(processed)
         }
         let prefs = AppPreferences.shared
         let terms = prefs.customDictionaryEnabled
             ? CustomDictionary.boostTerms(entries: prefs.customDictionaryEntries) : []
-        let fitted = CaretTextMatcher.fit(processed, into: field, properNouns: Set(terms))
+        let known = language == "auto" ? nil : language
+        let adjustCase = CaretTextMatcher.adjustsCase(
+            language: known ?? guessedLanguage(of: processed, after: field.before))
+        let fitted = CaretTextMatcher.fit(processed, into: field, properNouns: Set(terms),
+                                          adjustCase: adjustCase)
         Diag.mark("caret match: \(fitted == processed ? "nothing to change" : "fitted to the field")")
-        return fitted
+        return Prepared(fitted: fitted, standalone: processed)
     }
+
+    /// With auto-detect the engine does not say which language it heard, so it is read from the
+    /// dictation and the sentence before the caret together: a few words alone are too short to
+    /// tell German from English reliably.
+    static func guessedLanguage(of dictation: String, after before: String) -> String? {
+        let sample = String(before.suffix(guessSampleLength)) + " " + dictation
+        return NLLanguageRecognizer.dominantLanguage(for: sample)?.rawValue
+    }
+
+    static let guessSampleLength = 300
 
     // MARK: - Paste that didn't land (#162)
 
@@ -154,8 +192,9 @@ enum TranscriptInserter {
 
     /// Pastes through the clipboard and watches whether the app in front took the text.
     @MainActor
-    private static func pasteThroughClipboard(_ text: String, keepOnClipboard: Bool) {
-        pasteThroughClipboard(text, keepOnClipboard: keepOnClipboard,
+    private static func pasteThroughClipboard(_ prepared: Prepared, keepOnClipboard: Bool) {
+        pasteThroughClipboard(prepared.fitted, standalone: prepared.standalone,
+                              keepOnClipboard: keepOnClipboard,
                               retryShortcut: KeyboardShortcuts.getShortcut(for: .pasteLastTranscription)?.description,
                               warnWhenMissed: AppPreferences.shared.notifyWhenNoPasteTarget,
                               paste: { Diag.measure("TextInserter.paste") { TextInserter.paste() } })
@@ -165,11 +204,14 @@ enum TranscriptInserter {
     /// on a private pasteboard without posting a keystroke.
     ///
     /// - Parameters:
+    ///   - standalone: what the clipboard keeps and a missed paste holds once the paste is over,
+    ///     the text before it was fitted to the field. Only the paste itself carries `text`.
     ///   - retryShortcut: the paste-last shortcut, `nil` when none is bound.
     ///   - warnWhenMissed: "Warn when no field is focused". Read once, here, so the clipboard
     ///     decision and the notice can't disagree if the setting changes during the paste.
     @MainActor
-    static func pasteThroughClipboard(_ text: String, keepOnClipboard: Bool,
+    static func pasteThroughClipboard(_ text: String, standalone: String? = nil,
+                                      keepOnClipboard: Bool,
                                       retryShortcut: String?, warnWhenMissed: Bool,
                                       on pasteboard: NSPasteboard = .general,
                                       timing: ClipboardUtil.PasteTiming = .current,
@@ -181,7 +223,8 @@ enum TranscriptInserter {
         let retryKeys = afterMissing == .previousContents ? retryShortcut ?? "⌘V" : "⌘V"
         // With "Copy to clipboard" off the clipboard is only the paste vehicle (#44): the
         // previous contents come back once the paste is done.
-        ClipboardUtil.borrowForPaste(text, on: pasteboard,
+        let kept = standalone ?? text
+        ClipboardUtil.borrowForPaste(text, keeping: kept, on: pasteboard,
                                      afterLanding: keepOnClipboard ? .transcription : .previousContents,
                                      afterMissing: afterMissing,
                                      timing: timing,
@@ -189,7 +232,7 @@ enum TranscriptInserter {
                                      outcome: { outcome in
             guard outcome == .missed else { return }
             MainActor.assumeIsolated {
-                reportMissedPaste(text, insertion: insertion, retryKeys: retryKeys,
+                reportMissedPaste(kept, insertion: insertion, retryKeys: retryKeys,
                                   warn: warnWhenMissed)
             }
         })

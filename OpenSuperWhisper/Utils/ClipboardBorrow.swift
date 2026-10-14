@@ -56,7 +56,8 @@ extension ClipboardUtil {
     }
 
     /// Puts `text` on the pasteboard for one ⌘V (`paste`) and settles the clipboard once the paste
-    /// is over.
+    /// is over. A transcription left there afterwards is `keeping`, by default the pasted text:
+    /// one fitted to the field it went into is not the one to paste anywhere else (#163).
     ///
     /// The text is offered lazily: the pasteboard only gets it when someone asks for it, and that
     /// request is the paste landing. So the clipboard comes back a short while after the app in
@@ -75,6 +76,7 @@ extension ClipboardUtil {
     /// one reports an outcome: an earlier paste whose text was replaced before anyone read it
     /// can't be told apart from one still on its way.
     static func borrowForPaste(_ text: String,
+                               keeping kept: String? = nil,
                                on pasteboard: NSPasteboard = .general,
                                afterLanding: Afterwards = .previousContents,
                                afterMissing: Afterwards = .previousContents,
@@ -96,7 +98,7 @@ extension ClipboardUtil {
         }
 
         let watcher = PasteReadWatcher(text: text)
-        let borrow = Borrow(pasteboard: pasteboard, text: text, saved: saved,
+        let borrow = Borrow(pasteboard: pasteboard, text: kept ?? text, saved: saved,
                             changeCount: offerLazily(watcher, on: pasteboard),
                             afterLanding: afterLanding, afterMissing: afterMissing,
                             timing: timing, outcome: outcome)
@@ -128,6 +130,7 @@ extension ClipboardUtil {
     private final class Borrow {
         let saved: Snapshot?
         private let pasteboard: NSPasteboard
+        /// What the clipboard keeps when it is left with the transcription.
         private let text: String
         private let changeCount: Int
         private let afterLanding: Afterwards

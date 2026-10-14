@@ -28,12 +28,17 @@ final class MissedPasteWiringTests: XCTestCase {
         super.tearDown()
     }
 
-    private func paste(_ text: String = "transcription", keepOnClipboard: Bool = false,
-                       retryShortcut: String? = nil, takenByTheApp: Bool) {
-        TranscriptInserter.pasteThroughClipboard(text, keepOnClipboard: keepOnClipboard,
+    /// - Returns: what the app in front read, nil when it read nothing.
+    @discardableResult
+    private func paste(_ text: String = "transcription", standalone: String? = nil,
+                       keepOnClipboard: Bool = false,
+                       retryShortcut: String? = nil, takenByTheApp: Bool) -> String? {
+        var read: String?
+        TranscriptInserter.pasteThroughClipboard(text, standalone: standalone, keepOnClipboard: keepOnClipboard,
                                                  retryShortcut: retryShortcut, warnWhenMissed: false,
                                                  on: pasteboard, timing: timing,
-                                                 paste: { if takenByTheApp { _ = readLikeTheTargetApp() } })
+                                                 paste: { if takenByTheApp { read = readLikeTheTargetApp() } })
+        return read
     }
 
     private func readLikeTheTargetApp() -> String? {
@@ -103,6 +108,26 @@ final class MissedPasteWiringTests: XCTestCase {
         waitFor(0.3)
         XCTAssertEqual(TranscriptInserter.unlandedPaste, "transcription")
         XCTAssertEqual(pasteboard.string(forType: .string), "original")
+    }
+
+    // MARK: - Fitted to the field (#163)
+
+    /// The paste carries the text fitted to the field, but the clipboard keeps the sentence: a
+    /// lowercase start and a dropped period belong to that one place.
+    func testTheFieldGetsTheFittedTextAndTheClipboardKeepsTheSentence() {
+        let read = paste(" tomorrow", standalone: "Tomorrow.", keepOnClipboard: true, takenByTheApp: true)
+        waitFor(0.4)
+
+        XCTAssertEqual(read, " tomorrow")
+        XCTAssertEqual(pasteboard.string(forType: .string), "Tomorrow.")
+    }
+
+    func testAMissedFittedPasteHoldsTheSentence() {
+        paste(" tomorrow", standalone: "Tomorrow.", keepOnClipboard: true, takenByTheApp: false)
+        waitFor(0.4)
+
+        XCTAssertEqual(TranscriptInserter.unlandedPaste, "Tomorrow.")
+        XCTAssertEqual(pasteboard.string(forType: .string), "Tomorrow.")
     }
 
     // MARK: - Paste last

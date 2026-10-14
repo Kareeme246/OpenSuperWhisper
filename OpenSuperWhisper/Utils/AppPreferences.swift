@@ -550,11 +550,16 @@ final class AppPreferences {
 
     /// Apple Intelligence for the language dictations are cleaned up in.
     var appleIntelligenceAvailability: AppleIntelligenceAvailability {
-        AppleIntelligence.availability(language: Self.cleanupLanguage(
+        AppleIntelligence.availability(language: dictationLanguage)
+    }
+
+    /// The language a dictation made now would come out in, as `cleanupLanguage` resolves it.
+    var dictationLanguage: String? {
+        Self.cleanupLanguage(
             stored: whisperLanguage, translateToEnglish: translateToEnglish,
             keyboardLanguage: { [self] in
                 KeyboardLanguage.current(engine: selectedEngine, fluidAudioModelVersion: fluidAudioModelVersion)
-            }))
+            })
     }
 
     /// The language a dictation reaches the cleanup in: English once Whisper has translated it,
