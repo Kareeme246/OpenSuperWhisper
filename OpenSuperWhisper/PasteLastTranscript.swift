@@ -69,12 +69,15 @@ enum PasteLastTranscript {
         // app that was frontmost when the clip was recorded. This insertion has no earlier moment
         // to refer back to: the request is being made now, at this window.
         let prefs = AppPreferences.shared
-        let targetMissing = TranscriptInserter.insert(
+        let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        // Only a terminal's title is of use (#165), and reading it is a round trip to that app.
+        let windowTitle = AgentPromptPaste.isTerminal(bundleID) ? SourceCapture.focusedWindowTitle() : nil
+        let insertion = await TranscriptInserter.insert(
             TranscriptInserter.prepared(text, fitToField: prefs.matchTextAroundCaret,
                                         language: prefs.dictationLanguage),
             honorAutoPastePreference: false,
-            targetBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
-        if targetMissing {
+            targetBundleID: bundleID, windowTitle: windowTitle)
+        if insertion == .onClipboard {
             IndicatorWindowManager.shared.flash(.info("Copied — press ⌘V"))
         }
     }
