@@ -27,8 +27,18 @@ enum PasteLastTranscript {
     }
 
     /// Handles one press of the shortcut: find the last transcription and insert it.
+    ///
+    /// - Parameter insert: where the text goes; tests swap it to see the choice without a ⌘V.
     @MainActor
-    static func run() async {
+    static func run(insertingWith insert: @MainActor (String) async -> Void
+                        = { await PasteLastTranscript.insert($0) }) async {
+        // A paste that just missed is what the "Not pasted" notice sent the user here for, and
+        // with history off it is nowhere else.
+        if let unlanded = TranscriptInserter.unlandedPaste {
+            await insert(unlanded)
+            return
+        }
+
         let recordings: [Recording]
         do {
             recordings = try await RecordingStore.shared.fetchRecordings(limit: scanDepth, offset: 0)

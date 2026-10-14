@@ -19116,6 +19116,46 @@
           }
         }
       }
+    },
+    "Not pasted — press %@ to paste it": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pas collé — appuyez sur %@ pour le coller"
+          }
+        }
+      }
+    },
+    "Shows “Copied, press ⌘V” when no text field has the focus, and says so when a paste doesn’t land.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affiche « Copié, appuyez sur ⌘V » quand aucun champ de texte n'est actif, et prévient quand un collage n'aboutit pas."
+          }
+        }
+      }
+    },
+    "When off, what you had copied before is put back after the paste. Only a paste that doesn’t land, with the warning on and no shortcut to paste it again, leaves the dictation there for ⌘V.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Désactivé, ce que vous aviez copié avant est remis en place après le collage. Seul un collage qui n'aboutit pas, avec l'avertissement activé et sans raccourci pour le recoller, y laisse la dictée pour ⌘V."
+          }
+        }
+      }
+    },
+    "The dictation stays on the clipboard at least this long after the paste, and until the app has read it. Raise it if an app sometimes pastes your old item instead.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La dictée reste dans le presse-papiers au moins ce temps-là après le collage, et jusqu'à ce que l'app l'ait lue. Augmentez ce délai si une app colle parfois votre ancien élément à la place."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

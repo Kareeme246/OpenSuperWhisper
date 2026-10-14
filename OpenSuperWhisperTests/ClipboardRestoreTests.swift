@@ -10,6 +10,9 @@ final class ClipboardRestoreTests: XCTestCase {
 
     private var pasteboard: NSPasteboard!
 
+    /// Nobody reads the text in most of these tests, so the deadline is what ends the borrow.
+    static let fast = ClipboardUtil.PasteTiming(hold: 0.05, settle: 0.05, deadline: 0.1)
+
     override func setUp() {
         super.setUp()
         pasteboard = NSPasteboard(name: NSPasteboard.Name("OpenSuperWhisperTests." + UUID().uuidString))
@@ -67,7 +70,7 @@ final class ClipboardRestoreTests: XCTestCase {
         ClipboardUtil.copyToClipboard("original", to: pasteboard)
 
         var textDuringPaste: String?
-        ClipboardUtil.borrowForPaste("transcription", on: pasteboard, restoreAfter: 0.05) {
+        ClipboardUtil.borrowForPaste("transcription", on: pasteboard, timing: Self.fast) {
             textDuringPaste = pasteboard.string(forType: .string)
         }
 
@@ -78,7 +81,7 @@ final class ClipboardRestoreTests: XCTestCase {
     /// dictation borrowed for one ⌘V does not pile up in them.
     func testBorrowedTextIsMarkedTransientForClipboardHistories() {
         var types: [NSPasteboard.PasteboardType] = []
-        ClipboardUtil.borrowForPaste("transcription", on: pasteboard, restoreAfter: 0.05) {
+        ClipboardUtil.borrowForPaste("transcription", on: pasteboard, timing: Self.fast) {
             types = pasteboard.types ?? []
         }
         for marker in ClipboardUtil.transientTypes {
@@ -106,7 +109,7 @@ final class ClipboardRestoreTests: XCTestCase {
     func testBorrowForPasteRestoresPreviousContentsAfterDelay() {
         ClipboardUtil.copyToClipboard("original", to: pasteboard)
 
-        ClipboardUtil.borrowForPaste("transcription", on: pasteboard, restoreAfter: 0.05) {}
+        ClipboardUtil.borrowForPaste("transcription", on: pasteboard, timing: Self.fast) {}
 
         let restoreWindowElapsed = expectation(description: "restore window elapsed")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { restoreWindowElapsed.fulfill() }
@@ -117,7 +120,7 @@ final class ClipboardRestoreTests: XCTestCase {
     func testBorrowForPasteSkipsRestoreWhenSomethingElseWroteMeanwhile() {
         ClipboardUtil.copyToClipboard("original", to: pasteboard)
 
-        ClipboardUtil.borrowForPaste("transcription", on: pasteboard, restoreAfter: 0.05) {}
+        ClipboardUtil.borrowForPaste("transcription", on: pasteboard, timing: Self.fast) {}
         ClipboardUtil.copyToClipboard("user copy in between", to: pasteboard)
 
         let restoreWindowElapsed = expectation(description: "restore window elapsed")
@@ -135,8 +138,8 @@ final class ClipboardRestoreTests: XCTestCase {
         // brings back the user's contents.
         ClipboardUtil.copyToClipboard("original", to: pasteboard)
 
-        ClipboardUtil.borrowForPaste("transcription A", on: pasteboard, restoreAfter: 0.05) {}
-        ClipboardUtil.borrowForPaste("transcription B", on: pasteboard, restoreAfter: 0.05) {}
+        ClipboardUtil.borrowForPaste("transcription A", on: pasteboard, timing: Self.fast) {}
+        ClipboardUtil.borrowForPaste("transcription B", on: pasteboard, timing: Self.fast) {}
 
         let restoreWindowElapsed = expectation(description: "restore window elapsed")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { restoreWindowElapsed.fulfill() }
@@ -149,7 +152,7 @@ final class ClipboardRestoreTests: XCTestCase {
         ClipboardUtil.copyToClipboard("original", to: pasteboard)
 
         for n in 1...4 {
-            ClipboardUtil.borrowForPaste("transcription \(n)", on: pasteboard, restoreAfter: 0.05) {}
+            ClipboardUtil.borrowForPaste("transcription \(n)", on: pasteboard, timing: Self.fast) {}
         }
 
         let restoreWindowElapsed = expectation(description: "restore window elapsed")
@@ -162,8 +165,8 @@ final class ClipboardRestoreTests: XCTestCase {
         // Newer content beats our restore even when borrows have coalesced.
         ClipboardUtil.copyToClipboard("original", to: pasteboard)
 
-        ClipboardUtil.borrowForPaste("transcription A", on: pasteboard, restoreAfter: 0.05) {}
-        ClipboardUtil.borrowForPaste("transcription B", on: pasteboard, restoreAfter: 0.05) {}
+        ClipboardUtil.borrowForPaste("transcription A", on: pasteboard, timing: Self.fast) {}
+        ClipboardUtil.borrowForPaste("transcription B", on: pasteboard, timing: Self.fast) {}
         ClipboardUtil.copyToClipboard("user copy in between", to: pasteboard)
 
         let restoreWindowElapsed = expectation(description: "restore window elapsed")
@@ -176,7 +179,7 @@ final class ClipboardRestoreTests: XCTestCase {
         // Once a borrow's restore has fired, the next borrow is a fresh cycle: it must snapshot
         // whatever is on the pasteboard NOW, not resurrect the coalescing state of the last one.
         ClipboardUtil.copyToClipboard("first original", to: pasteboard)
-        ClipboardUtil.borrowForPaste("transcription A", on: pasteboard, restoreAfter: 0.05) {}
+        ClipboardUtil.borrowForPaste("transcription A", on: pasteboard, timing: Self.fast) {}
 
         let firstRestoreDone = expectation(description: "first restore done")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { firstRestoreDone.fulfill() }
@@ -184,7 +187,7 @@ final class ClipboardRestoreTests: XCTestCase {
         XCTAssertEqual(pasteboard.string(forType: .string), "first original")
 
         ClipboardUtil.copyToClipboard("second original", to: pasteboard)
-        ClipboardUtil.borrowForPaste("transcription B", on: pasteboard, restoreAfter: 0.05) {}
+        ClipboardUtil.borrowForPaste("transcription B", on: pasteboard, timing: Self.fast) {}
 
         let secondRestoreDone = expectation(description: "second restore done")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { secondRestoreDone.fulfill() }
@@ -200,8 +203,8 @@ final class ClipboardRestoreTests: XCTestCase {
         ClipboardUtil.copyToClipboard("original A", to: pasteboard)
         ClipboardUtil.copyToClipboard("original B", to: other)
 
-        ClipboardUtil.borrowForPaste("transcription", on: pasteboard, restoreAfter: 0.05) {}
-        ClipboardUtil.borrowForPaste("transcription", on: other, restoreAfter: 0.05) {}
+        ClipboardUtil.borrowForPaste("transcription", on: pasteboard, timing: Self.fast) {}
+        ClipboardUtil.borrowForPaste("transcription", on: other, timing: Self.fast) {}
 
         let restoreWindowElapsed = expectation(description: "restore window elapsed")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { restoreWindowElapsed.fulfill() }

@@ -284,6 +284,9 @@ final class DictationPipeline: ObservableObject {
             if let replyID = item.context.agentReplyID {
                 if hasText {
                     AgentInbox.shared.receiveDictation(text, for: replyID, send: shouldSubmit)
+                    // Never inserted, but newer all the same: the paste-last shortcut must not
+                    // fall back to an older paste that missed.
+                    TranscriptInserter.noteNewerTranscription()
                 }
                 return
             }

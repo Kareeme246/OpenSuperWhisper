@@ -27,12 +27,12 @@ struct TextAIInsertionGroup: View {
                         valueLabel: "\(viewModel.typingPaceMilliseconds) ms")
             }
             SettingRow("Also keep it on the clipboard",
-                       hint: "When off, what you had copied before is put back after the paste.") {
+                       hint: "When off, what you had copied before is put back after the paste. Only a paste that doesn’t land, with the warning on and no shortcut to paste it again, leaves the dictation there for ⌘V.") {
                 SSwitch(isOn: $viewModel.autoCopyToClipboard)
             }
             if !viewModel.autoCopyToClipboard {
                 SettingRow("Give the clipboard back after",
-                           hint: "How long the dictation stays on the clipboard for the paste. Raise it if an app sometimes pastes your old item instead.",
+                           hint: "The dictation stays on the clipboard at least this long after the paste, and until the app has read it. Raise it if an app sometimes pastes your old item instead.",
                            badge: viewModel.clipboardRestoreDelayMs == Self.defaultRestoreDelayMs ? nil : ("Customized", .custom),
                            advanced: true, indented: true) {
                     SSlider(value: $viewModel.clipboardRestoreDelayMs.rubricSnapped(to: 50),
@@ -41,7 +41,7 @@ struct TextAIInsertionGroup: View {
                 }
             }
             SettingRow("Warn when no field is focused",
-                       hint: "Shows “Copied, press ⌘V” when no text field has the focus.") {
+                       hint: "Shows “Copied, press ⌘V” when no text field has the focus, and says so when a paste doesn’t land.") {
                 SSwitch(isOn: $viewModel.notifyWhenNoPasteTarget)
             }
             SettingRow("“press enter” sends",
