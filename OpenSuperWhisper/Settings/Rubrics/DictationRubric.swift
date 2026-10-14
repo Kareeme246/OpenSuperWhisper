@@ -7,6 +7,7 @@ import OpenSuperWhisperCore
 struct DictationRubric: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject private var micService = MicrophoneService.shared
+    @Environment(\.locale) private var locale
     /// The first trigger that is a modifier on its own (or a modifier chord). Those are read with
     /// an event tap, which needs Input Monitoring. Mirrored in state because the trigger lists
     /// live in preferences, which SwiftUI does not observe.
@@ -155,12 +156,7 @@ struct DictationRubric: View {
         let prefs = AppPreferences.shared
         let triggers = RecordingTriggerSet.load(from: prefs.recordingTriggers).triggers
             + RecordingTriggerSet.load(from: prefs.holdRecordingTriggers).triggers
-        modifierTrigger = triggers.first { trigger in
-            switch trigger {
-            case .modifier, .chord: return true
-            default: return false
-            }
-        }?.caps.joined(separator: " ")
+        modifierTrigger = triggers.first(where: \.needsInputMonitoring)?.caps.joined(separator: " ")
     }
 
     private func openPrivacyPane(_ anchor: String) {
@@ -193,10 +189,11 @@ struct DictationRubric: View {
             }
             MicrophoneLevelRow(microphone: micService.currentMicrophone)
             SettingRow("Spoken language", hint: "Automatic follows the detected language or your keyboard.") {
-                SMenu(Text(verbatim: languageLabel)) {
+                SMenu(languageLabel) {
                     Picker("", selection: $viewModel.selectedLanguage) {
-                        ForEach(viewModel.supportedLanguages, id: \.self) { code in
-                            Text(verbatim: LanguageUtil.languageNames[code] ?? code).tag(code)
+                        ForEach(SpokenLanguageName.sorted(viewModel.supportedLanguages, locale: locale),
+                                id: \.self) { code in
+                            SpokenLanguageName.text(for: code, locale: locale).tag(code)
                         }
                         Divider()
                         Text(verbatim: KeyboardLanguage.displayName).tag(KeyboardLanguage.selectionCode)
@@ -258,9 +255,11 @@ struct DictationRubric: View {
         return "Also switchable from the menu bar."
     }
 
-    private var languageLabel: String {
-        if viewModel.selectedLanguage == KeyboardLanguage.selectionCode { return KeyboardLanguage.displayName }
-        return LanguageUtil.languageNames[viewModel.selectedLanguage] ?? viewModel.selectedLanguage
+    private var languageLabel: Text {
+        if viewModel.selectedLanguage == KeyboardLanguage.selectionCode {
+            return Text(verbatim: KeyboardLanguage.displayName)
+        }
+        return SpokenLanguageName.text(for: viewModel.selectedLanguage, locale: locale)
     }
 
     private var translateHint: LocalizedStringKey {

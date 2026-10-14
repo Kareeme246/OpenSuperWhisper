@@ -36,12 +36,16 @@ struct TriggerRecorderField: View {
     /// `.chips` draws the redesign's key caps: the list as a wrapping row of caps ending in
     /// "Add", a single binding as one cap. Same capture and storage either way.
     var style: Style = .field
+    /// Hands what is recorded to the caller instead of storing it anywhere, for onboarding,
+    /// which decides itself what the trigger list holds. The caller draws the captured trigger;
+    /// the field stays a "record" control. Same capture rules as everywhere else.
+    var capture: Binding<RecordingTrigger?>? = nil
 
     enum Style { case field, chips }
 
     private var allowsChord: Bool {
         guard allowsModifier else { return false }
-        return allowsMultiple ? !holdOnly : chord != nil
+        return allowsMultiple ? !holdOnly : (chord != nil || capture != nil)
     }
 
     /// Mirrors the stored shortcut. `KeyboardShortcuts.getShortcut` is not something SwiftUI
@@ -60,6 +64,7 @@ struct TriggerRecorderField: View {
     @State private var set = RecordingTriggerSet.empty
 
     private var triggers: [RecordingTrigger] {
+        if capture != nil { return [] }
         guard allowsMultiple else {
             if let stored = chord?.wrappedValue, let chord = ModifierChord(storageValue: stored) {
                 return [.chord(chord)]
@@ -303,7 +308,7 @@ struct TriggerRecorderField: View {
                     .help("Clear shortcut")
                 }
             } else {
-                Text("Click to record")
+                Text(capture?.wrappedValue == nil ? "Click to record" : "Record again")
                     .scaledFont(size: 13)
                     .foregroundColor(STheme.hint)
                     .lineLimit(1)
@@ -374,7 +379,7 @@ struct TriggerRecorderField: View {
         RecordingTrigger.modifierBadges.filter { heldModifiers.contains($0.flag) }
     }
 
-    private var placeholder: String {
+    private var placeholder: LocalizedStringKey {
         switch (allowsModifier, allowsMouse) {
         case (true, true): return "key, modifier or mouse…"
         case (true, false): return "key or modifier…"
@@ -470,6 +475,11 @@ struct TriggerRecorderField: View {
     /// Stores the trigger, clearing the other two kinds: exactly one is active at a time, which
     /// is what makes the mode implicit.
     private func save(_ trigger: RecordingTrigger) {
+        if let capture {
+            capture.wrappedValue = trigger
+            disarm()
+            return
+        }
         if allowsMultiple {
             set.add(trigger)
             releaseFromOtherActions(trigger)
@@ -524,22 +534,7 @@ struct TriggerRecorderField: View {
         } else {
             prefs.holdRecordingTriggers = RecordingTriggerSet.removing(trigger, from: prefs.holdRecordingTriggers)
         }
-        switch trigger {
-        case .modifier(let key):
-            if prefs.submitModifierOnlyHotkey == key.rawValue {
-                prefs.submitModifierOnlyHotkey = ModifierKey.none.rawValue
-            }
-        case .mouse(let button):
-            if prefs.submitMouseButtonHotkey == button.rawValue {
-                prefs.submitMouseButtonHotkey = MouseButton.none.rawValue
-            }
-        case .chord(let chord):
-            if prefs.submitModifierChord == chord.storageValue {
-                prefs.submitModifierChord = ""
-            }
-        case .keyCombo, .none:
-            break
-        }
+        prefs.releaseSubmitBinding(claimedBy: trigger)
     }
 
     /// Same rule, applied when a single-binding field claims something the trigger list holds.
@@ -550,6 +545,10 @@ struct TriggerRecorderField: View {
     }
 
     private func clear() {
+        if let capture {
+            capture.wrappedValue = nil
+            return
+        }
         mouseButton = .none
         modifierKey = .none
         chord?.wrappedValue = ""

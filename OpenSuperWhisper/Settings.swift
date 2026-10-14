@@ -1499,15 +1499,24 @@ enum OnboardingModelType {
     case whisper(url: URL, size: Int)
     case parakeet(version: String)
     case senseVoice
+    /// The system's own model (macOS 26+). Never downloaded by the app: macOS holds it.
+    case appleSpeech
 }
 
 struct OnboardingUnifiedModel: Identifiable {
     let id = UUID()
     let name: String
     var isDownloaded: Bool
-    let description: String
+    /// Localized in the view, which is why it is a key and not a String: a plain String is
+    /// drawn verbatim, and these showed in English in every language.
+    let description: LocalizedStringKey
     let type: OnboardingModelType
     var downloadProgress: Double = 0.0
+
+    var isAppleSpeech: Bool {
+        if case .appleSpeech = type { return true }
+        return false
+    }
 }
 
 struct OnboardingUnifiedModels {

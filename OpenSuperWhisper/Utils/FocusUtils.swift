@@ -34,10 +34,10 @@ class FocusUtils {
         return indicatorPosition == "cursor"
     }
 
-    /// Where the indicator should anchor in "cursor" mode, in AX (Quartz) coordinates: the text
-    /// caret when the focused text element reports a believable one, otherwise that element
-    /// itself. nil when nothing with a text selection is focused, or accessibility cannot place
-    /// it, leaving the caller to fall back to the mouse.
+    /// Where the indicator should anchor in "cursor" mode, in AX (Quartz) coordinates, as
+    /// `CaretAnchor.choose` picks it from the focused text element. nil when nothing with a text
+    /// selection is focused, or accessibility cannot place it, leaving the caller to fall back to
+    /// the mouse.
     static func getCaretRect() -> CGRect? {
         let systemElement = AXUIElementCreateSystemWide()
         AXUIElementSetMessagingTimeout(systemElement, axMessagingTimeout)
@@ -53,50 +53,17 @@ class FocusUtils {
 
         // Only a text element has a caret to follow. Without a selection range this is a button,
         // a web area or the like, and its frame says nothing about where the user is typing.
-        var range: CFTypeRef?
+        var rangeRef: CFTypeRef?
+        var selection = CFRange()
         guard AXUIElementCopyAttributeValue(element,
                                             kAXSelectedTextRangeAttribute as CFString,
-                                            &range) == .success,
-              let range else { return nil }
+                                            &rangeRef) == .success,
+              let rangeRef,
+              AXValueGetValue(rangeRef as! AXValue, .cfRange, &selection) else { return nil }
 
-        return caretAnchorRect(caret: bounds(of: range, in: element), element: frame(of: element))
-    }
-
-    /// Chooses between what the focused element says about its caret and its own frame.
-    ///
-    /// A successful bounds query is not a believable one. Chrome's address bar answers with an
-    /// empty rect at the bottom-left corner of the primary display, wherever its window actually
-    /// is, which put the bubble in the corner of a different screen. A real caret has height, so
-    /// one without is discarded in favour of the field. Where a caret with height sits is not
-    /// second-guessed: TextEdit reports a valid one above its text view's own frame. Pure, for
-    /// testing.
-    static func caretAnchorRect(caret: CGRect?, element: CGRect?) -> CGRect? {
-        if let caret, caret.height > 0 { return caret }
-        return element.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
-    }
-
-    private static func bounds(of range: CFTypeRef, in element: AXUIElement) -> CGRect? {
-        var bounds: CFTypeRef?
-        guard AXUIElementCopyParameterizedAttributeValue(element,
-                                                         kAXBoundsForRangeParameterizedAttribute as CFString,
-                                                         range,
-                                                         &bounds) == .success,
-              let bounds else { return nil }
-        return (bounds as! AXValue).toCGRect()
-    }
-
-    private static func frame(of element: AXUIElement) -> CGRect? {
-        var position: CFTypeRef?
-        var size: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &position) == .success,
-              AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &size) == .success,
-              let position, let size else { return nil }
-
-        var origin = CGPoint.zero
-        var extent = CGSize.zero
-        guard AXValueGetValue(position as! AXValue, .cgPoint, &origin),
-              AXValueGetValue(size as! AXValue, .cgSize, &extent) else { return nil }
-        return CGRect(origin: origin, size: extent)
+        let choice = CaretAnchor.choose(selection: selection, in: AXTextElementGeometry(element: element))
+        Diag.mark("caret anchor: \(choice?.source.rawValue ?? "none, following the mouse")")
+        return choice?.rect
     }
 
     /// Converts a point from AX API coordinate system (Quartz: origin at top-left of primary screen, Y increases downward)
@@ -285,25 +252,5 @@ class FocusUtils {
         }
 
         return (text.count, caret)
-    }
-}
-
-private extension AXValue {
-    func toCGRect() -> CGRect? {
-        var rect = CGRect.zero
-        let type: AXValueType = AXValueGetType(self)
-        
-        guard type == .cgRect else {
-            print("AXValue is not of type CGRect, but \(type)") // More informative error
-            return nil
-        }
-        
-        let success = AXValueGetValue(self, .cgRect, &rect)
-        
-        guard success else {
-            print("Failed to get CGRect value from AXValue")
-            return nil
-        }
-        return rect
     }
 }

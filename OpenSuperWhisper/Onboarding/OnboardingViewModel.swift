@@ -6,6 +6,8 @@ import OpenSuperWhisperCore
 enum OnboardingShortcutOption: String, CaseIterable {
     case keyCombination
     case rightOption
+    /// A key, combination or mouse button the user records in the step.
+    case custom
 }
 
 class OnboardingViewModel: ObservableObject {
@@ -13,6 +15,7 @@ class OnboardingViewModel: ObservableObject {
         didSet {
             AppPreferences.shared.whisperLanguage = selectedLanguage
             suggestDefaultModel()
+            Task { @MainActor in await refreshAppleSpeech() }
         }
     }
     
@@ -22,18 +25,24 @@ class OnboardingViewModel: ObservableObject {
         }
     }
     
-    @Published var selectedShortcut: OnboardingShortcutOption {
+    /// Only the card on screen: the choice reaches the app when the step is left (see
+    /// `applyShortcutChoice`), since re-arming the key monitors on every click made the cards lag.
+    @Published var selectedShortcut: OnboardingShortcutOption
+
+    /// What the Custom card recorded. Recording something picks that card.
+    @Published var customTrigger: RecordingTrigger? {
         didSet {
-            switch selectedShortcut {
-            case .keyCombination:
-                AppPreferences.shared.modifierOnlyHotkey = ModifierKey.none.rawValue
-            case .rightOption:
-                AppPreferences.shared.modifierOnlyHotkey = ModifierKey.rightOption.rawValue
-            }
-            AppPreferences.shared.setRightOptionTrigger(selectedShortcut == .rightOption)
-            NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
+            if customTrigger != nil && selectedShortcut != .custom { selectedShortcut = .custom }
         }
     }
+
+    /// The combination the second card offers: the one the list held when onboarding opened,
+    /// so recording a custom one (which takes its place in the list) never relabels the card.
+    let combination: RecordingTrigger?
+    /// The recorded trigger last written to the list, taken out again when the choice changes.
+    var appliedCustom: RecordingTrigger?
+    /// What the app listens to now: the choice it opened with, until a different one is applied.
+    var appliedChoice = OnboardingShortcutChoice(option: .keyCombination, custom: nil)
 
     @Published var unifiedModels: [OnboardingUnifiedModel] = []
     @Published var selectedModelId: UUID?
@@ -41,16 +50,32 @@ class OnboardingViewModel: ObservableObject {
     @Published var isDownloading: Bool = false
     @Published var downloadProgress: Double = 0.0
     @Published var downloadingModelName: String?
+    /// What Apple's speech model offers for `selectedLanguage`. Read asynchronously, so it
+    /// starts unavailable and the step redraws once the system has answered.
+    @Published private(set) var appleSpeech: AppleSpeechOffer = .unavailable
 
     private let modelManager = WhisperModelManager.shared
+    private let system: OnboardingSystem
     private var downloadTask: Task<Void, Error>?
+    /// Set once the user picks a model, a server or a download. From then on the default
+    /// stops following the language picker.
+    private var userChoseModel = false
+    /// Apple's row, kept so its identity (and so a selection of it) survives being taken out
+    /// of the list and put back when the language changes.
+    private let appleSpeechModel = OnboardingUnifiedModel(
+        name: "Apple Speech", isDownloaded: false, description: "", type: .appleSpeech)
 
-    init() {
-        let systemLanguage = LanguageUtil.getSystemLanguage()
-        AppPreferences.shared.whisperLanguage = systemLanguage
-        self.selectedLanguage = systemLanguage
+    init(system: OnboardingSystem = .live) {
+        self.system = system
+        let language = OnboardingLanguageDefault.pick(appLanguage: system.appLanguage,
+                                                      preferredLanguages: system.preferredLanguages,
+                                                      available: LanguageUtil.availableLanguages)
+        AppPreferences.shared.whisperLanguage = language
+        self.selectedLanguage = language
         self.useAsianAutocorrect = AppPreferences.shared.useAsianAutocorrect
-        
+        self.combination = RecordingTriggerSet.load(from: AppPreferences.shared.recordingTriggers)
+            .keyCombos.first.map { .keyCombo($0) }
+
         let currentHotkey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
         if currentHotkey == .none && !AppPreferences.shared.hasCompletedOnboarding {
             // Default to key combination mode — does NOT require Input Monitoring permission.
@@ -61,39 +86,48 @@ class OnboardingViewModel: ObservableObject {
         } else {
             self.selectedShortcut = currentHotkey == .rightOption ? .rightOption : .keyCombination
         }
+        appliedChoice = pendingChoice
         
         initializeUnifiedModels()
+        Task { @MainActor in await refreshAppleSpeech() }
     }
 
     func initializeUnifiedModels() {
         unifiedModels = OnboardingUnifiedModels.availableModels.map { model in
             var updatedModel = model
-            switch model.type {
-            case .whisper(let url, _):
-                let filename = url.lastPathComponent
-                updatedModel.isDownloaded = modelManager.isModelDownloaded(name: filename)
-            case .parakeet(let version):
-                updatedModel.isDownloaded = isFluidAudioModelDownloaded(version: version)
-            case .senseVoice:
-                updatedModel.isDownloaded = SenseVoiceModelManager.shared.isDownloaded
-            }
+            updatedModel.isDownloaded = system.isDownloaded(model.type)
             return updatedModel
-        }
-        
-        if selectedModelId == nil, let firstDownloaded = unifiedModels.first(where: { $0.isDownloaded }) {
-            selectedModelId = firstDownloaded.id
         }
         suggestDefaultModel()
     }
 
-    /// With nothing downloaded yet, preselects Parakeet Ultra, or Whisper when Ultra does not
-    /// speak the chosen language. Follows the language picker until a model is on disk; a model
-    /// the user already has is never second-guessed.
+    /// Asks the system what Apple's model offers for the language, then puts its row first or
+    /// takes it out. Answers for a language the picker has since left are dropped.
+    @MainActor
+    func refreshAppleSpeech() async {
+        let language = selectedLanguage
+        let offer = await system.appleSpeech(language)
+        guard language == selectedLanguage else { return }
+        appleSpeech = offer
+        unifiedModels.removeAll(where: \.isAppleSpeech)
+        if offer != .unavailable {
+            unifiedModels.insert(appleSpeechModel, at: 0)
+        } else if selectedModelId == appleSpeechModel.id {
+            // Its row is gone: the choice no longer stands, so the default takes over again.
+            selectedModelId = nil
+            userChoseModel = false
+        }
+        suggestDefaultModel()
+    }
+
+    /// Preselects `OnboardingModelDefault`'s pick and follows the language picker, until the
+    /// user chooses for themselves.
     private func suggestDefaultModel() {
-        guard !remoteSelected, !unifiedModels.contains(where: { $0.isDownloaded }) else { return }
-        guard let model = unifiedModels.first(where: { Self.isDefaultCandidate($0, language: selectedLanguage) })
+        guard !remoteSelected, !userChoseModel else { return }
+        guard let model = OnboardingModelDefault.pick(from: unifiedModels, language: selectedLanguage,
+                                                      appleSpeech: appleSpeech)
         else { return }
-        selectModel(model)
+        activate(model)
     }
 
     static func isDefaultCandidate(_ model: OnboardingUnifiedModel, language: String) -> Bool {
@@ -103,32 +137,34 @@ class OnboardingViewModel: ObservableObject {
                 engine: "fluidaudio", fluidAudioModelVersion: version).contains(language)
         case .whisper:
             return true
-        case .senseVoice:
+        case .senseVoice, .appleSpeech:
             return false
         }
     }
     
-    func isFluidAudioModelDownloaded(version: String) -> Bool {
-        let asrVersion = AsrModelVersion(preference: version)
-        let cacheDirectory = AsrModels.defaultCacheDirectory(for: asrVersion)
-        return AsrModels.modelsExist(at: cacheDirectory, version: asrVersion)
-    }
-    
+    /// Apple's model needs nothing from the app, even when macOS still has to fetch the
+    /// language: it does that itself on first use.
     var canContinue: Bool {
         if remoteSelected { return true }
         guard let selectedId = selectedModelId else { return false }
-        return unifiedModels.contains { $0.id == selectedId && $0.isDownloaded }
+        return unifiedModels.contains { $0.id == selectedId && ($0.isDownloaded || $0.isAppleSpeech) }
     }
 
     // Selecting a remote (OpenAI-compatible) server skips the local-model
     // requirement entirely; the endpoint/key are configured later in Settings.
     func selectRemote() {
+        userChoseModel = true
         remoteSelected = true
         selectedModelId = nil
         AppPreferences.shared.selectedEngine = "remote"
     }
 
     func selectModel(_ model: OnboardingUnifiedModel) {
+        userChoseModel = true
+        activate(model)
+    }
+
+    private func activate(_ model: OnboardingUnifiedModel) {
         remoteSelected = false
         selectedModelId = model.id
 
@@ -142,6 +178,8 @@ class OnboardingViewModel: ObservableObject {
             AppPreferences.shared.fluidAudioModelVersion = version
         case .senseVoice:
             AppPreferences.shared.selectedEngine = "sensevoice"
+        case .appleSpeech:
+            AppPreferences.shared.selectedEngine = "apple"
         }
     }
 
@@ -164,6 +202,8 @@ class OnboardingViewModel: ObservableObject {
             try await downloadParakeetModel(model: model, version: version)
         case .senseVoice:
             try await downloadSenseVoiceModel(model: model)
+        case .appleSpeech:
+            break
         }
     }
     
@@ -398,13 +438,13 @@ class OnboardingViewModel: ObservableObject {
 }
 
 extension OnboardingViewModel {
-    /// The model the model step puts first: the one `suggestDefaultModel` picks for the spoken
-    /// language when nothing is on disk yet.
+    /// The model the model step recommends: the best one to download for the spoken language.
+    /// Apple's, when offered, sits above it and is preselected, since it needs no download.
     var recommendedModel: OnboardingUnifiedModel? {
         unifiedModels.first { Self.isDefaultCandidate($0, language: selectedLanguage) }
     }
 
-    var hasDownloadedModel: Bool {
-        unifiedModels.contains { $0.isDownloaded }
+    var appleSpeechRow: OnboardingUnifiedModel? {
+        unifiedModels.first(where: \.isAppleSpeech)
     }
 }

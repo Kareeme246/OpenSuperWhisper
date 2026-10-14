@@ -58,6 +58,9 @@ permissions (microphone, and Accessibility to type into other apps), and a first
 - 🏠 **Home.** Every dictation, grouped by day, with the app it went to and the model that wrote it.
   Filter dictations, imported files or errors, search everything with ⌘K, copy, play back, or run a
   dictation again with another model. A failed transcription keeps its audio and a retry button.
+- 🎙️ **A microphone you can check.** The microphone menu on Home and in Settings shows a live input
+  level, with the input volume right under it, so a mic that's too quiet is easy to spot and fix.
+  Dictations recorded far too quiet are lifted before transcription.
 - 📁 **Files too.** Drop audio files on the window or use **Import**, and they queue up.
 - 🌍 **Your language.** About 99 languages with auto-detect, or follow your keyboard layout.
   Translation to English with Whisper. The interface is in English, French, German, Spanish,
@@ -126,7 +129,14 @@ Install the plugin from Settings → Assistants and OpenSuperWhisper shows a sma
 **Claude Code** finishes a task, needs a permission or asks you a question. Read the answer, then
 reply by voice or keyboard without going back to the terminal. **Codex** works too, except for its
 questions, which still wait in the terminal. You choose which events
-show the panel and which projects it follows.
+show the panel and which projects it follows. With live text on, your reply appears in the panel as
+you dictate it.
+
+To answer in the terminal instead, click the terminal button in the panel's header, or press ⌘O
+once the panel has focus. In [Warp](https://www.warp.dev) it opens the exact window, tab and pane
+the agent runs in. Other terminals and editors come to the front, and so does the terminal holding
+a tmux, zellij or screen session, without picking the pane. The panel stays on screen and the agent
+keeps waiting for your answer.
 
 <div align="center">
 <picture>
@@ -176,8 +186,8 @@ They install alongside the stable build and never touch your auto-updates.
 
 - 🐞 **Bugs**: [open an issue](https://github.com/my-monkeys/OpenSuperWhisper/issues/new) with your
   macOS version, the engine and model in use, and the steps to reproduce.
-- 💬 **Feedback**, no account needed: the form on [opensuperwhisper.com](https://opensuperwhisper.com/#feedback),
-  or Help & what's new in the app.
+- 💬 **Feedback**, no account needed: **Feedback** in the app's sidebar opens a short form (it shows
+  exactly what it sends), or use the one on [opensuperwhisper.com](https://opensuperwhisper.com/#feedback).
 
 ## Support the project
 

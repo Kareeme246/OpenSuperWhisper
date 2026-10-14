@@ -3,6 +3,11 @@ import SwiftUI
 /// Wraps its children onto as many lines as it needs. SwiftUI has no flow layout of its own.
 struct FlowLayout: Layout {
     var spacing: CGFloat = 6
+    /// Gap between lines; `spacing` when nil.
+    var lineSpacing: CGFloat? = nil
+    /// Centres each child on its line instead of hanging it from the top, for words set
+    /// between taller key caps, whose middles have to line up.
+    var centersLines = false
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
@@ -17,7 +22,8 @@ struct FlowLayout: Layout {
             var x = bounds.minX
             for index in row.indices {
                 let size = Self.size(of: subviews[index], within: bounds.width)
-                subviews[index].place(at: CGPoint(x: x, y: bounds.minY + row.y),
+                let drop = centersLines ? (row.height - size.height) / 2 : 0
+                subviews[index].place(at: CGPoint(x: x, y: bounds.minY + row.y + drop),
                                       proposal: ProposedViewSize(size))
                 x += size.width + spacing
             }
@@ -40,7 +46,7 @@ struct FlowLayout: Layout {
             let size = Self.size(of: subviews[index], within: width)
             if !row.indices.isEmpty && x + size.width > width {
                 rows.append(row)
-                row = Row(y: row.y + row.height + spacing)
+                row = Row(y: row.y + row.height + (lineSpacing ?? spacing))
                 x = 0
             }
             row.indices.append(index)

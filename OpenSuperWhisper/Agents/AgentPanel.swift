@@ -20,15 +20,23 @@ final class AgentPanelController {
     /// The panel is the key window: the user clicked into it, so their trigger answers it.
     var hasFocus: Bool { panel?.isKeyWindow == true && panel?.isVisible == true }
 
-    private var returnMonitor: Any?
+    private var keyMonitor: Any?
 
     /// Return in the panel, handled here rather than by the field: a multi-line SwiftUI field
     /// takes Return for itself and never submits, so pressing it did nothing. Return sends,
     /// ⇧Return starts a new line. While a reply is dictated, Return stops and sends it, unless
     /// the user has a stop-and-submit binding of their own, which then does that job alone.
-    private func watchReturnKey() {
-        guard returnMonitor == nil else { return }
-        returnMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+    /// ⌘O opens the agent's terminal, here too so the field cannot take it first.
+    private func watchKeys() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.window is AgentPanel,
+               // Not the whole device-independent mask: Caps Lock is in it.
+               event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
+               event.charactersIgnoringModifiers?.lowercased() == "o",
+               let request = AgentInbox.shared.current {
+                return AgentHostJump.open(request) ? nil : event
+            }
             let isReturn = event.keyCode == 36 || event.keyCode == 76  // Return, keypad Enter
             guard isReturn, event.window is AgentPanel else { return event }
             // The field does not break the line on ⇧Return either, so the break is typed here,
@@ -56,9 +64,9 @@ final class AgentPanelController {
         panel?.makeKey()
     }
 
-    private func stopWatchingReturnKey() {
-        if let returnMonitor { NSEvent.removeMonitor(returnMonitor) }
-        returnMonitor = nil
+    private func stopWatchingKeys() {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
     }
 
     private init() {}
@@ -75,10 +83,10 @@ final class AgentPanelController {
         #endif
         if visible {
             show()
-            watchReturnKey()
+            watchKeys()
         } else {
             hide()
-            stopWatchingReturnKey()
+            stopWatchingKeys()
         }
     }
 
@@ -232,26 +240,33 @@ struct AgentPanelView: View {
                     .lineLimit(1)
                 // Redrawn every half minute so "2 minutes ago" keeps counting while it waits.
                 TimelineView(.periodic(from: .now, by: 30)) { context in
-                    Text(subtitle(for: request, now: context.date))
+                    subtitle(for: request, now: context.date)
                         .scaledFont(size: 12.5)
                         .foregroundColor(STheme.hint)
-                        .lineLimit(1)
                 }
             }
             Spacer(minLength: 8)
             if inbox.pending.count > 1 { pager(for: request) }
-            Button { inbox.dismiss(request) } label: {
-                Image(systemName: "xmark")
-                    .scaledFont(size: 11, weight: .bold)
-                    .foregroundColor(STheme.textSecondary)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(STheme.fill))
-                    .contentShape(Circle())
+            HStack(spacing: 8) {
+                AgentOpenHostButton(request: request)
+                closeButton(for: request)
             }
-            .buttonStyle(.plain)
-            .pointerCursorOnHover()
-            .help("Let it stop: the agent waits in its terminal, as it would without OpenSuperWhisper")
         }
+    }
+
+    private func closeButton(for request: AgentRequest) -> some View {
+        Button { inbox.dismiss(request) } label: {
+            Image(systemName: "xmark")
+                .scaledFont(size: 11, weight: .bold)
+                .foregroundColor(STheme.textSecondary)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(STheme.fill))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .pointerCursorOnHover()
+        .accessibilityLabel(Text("Close"))
+        .help("Let it stop: the agent waits in its terminal, as it would without OpenSuperWhisper")
     }
 
     @ViewBuilder private func content(for request: AgentRequest) -> some View {
@@ -378,13 +393,31 @@ struct AgentPanelView: View {
         .pointerCursorOnHover()
     }
 
-    private func subtitle(for request: AgentRequest, now: Date) -> String {
+    /// When the header runs short the agent's name goes first (its avatar already says it),
+    /// then the project's is cut in the middle: the project is what tells sessions apart. The
+    /// age is never cut.
+    private func subtitle(for request: AgentRequest, now: Date) -> some View {
         let formatter = RelativeDateTimeFormatter()
         formatter.dateTimeStyle = .named  // "now" rather than "in 0 seconds"
         formatter.unitsStyle = .short  // "40 sec. ago" leaves room for the pager
         let age = formatter.localizedString(for: min(request.createdAt, now), relativeTo: now)
-        let project = request.title == nil ? "" : " · \(request.projectName)"
-        return "\(request.agent)\(project) · \(age)"
+        let project = request.title == nil ? nil : request.projectName
+        // Whole names or none: a name squeezed to its first letter reads as a stray glyph.
+        return ViewThatFits(in: .horizontal) {
+            Text(verbatim: ([request.agent] + [project, age].compactMap { $0 }).joined(separator: " · "))
+                .lineLimit(1)
+            HStack(spacing: 0) {
+                if let project {
+                    Text(verbatim: "\(project) · ")
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Text(verbatim: age)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .layoutPriority(1)
+            }
+        }
     }
 
     private func pager(for request: AgentRequest) -> some View {

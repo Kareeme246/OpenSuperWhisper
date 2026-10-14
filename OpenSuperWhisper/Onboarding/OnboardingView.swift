@@ -13,20 +13,23 @@ import OpenSuperWhisperCore
 /// first dictation. Only the model is required, so nobody reaches the app with no way to
 /// transcribe; permissions can be granted later, the main window's status card asks for them.
 struct OnboardingView: View {
-    @StateObject private var viewModel = OnboardingViewModel()
+    @StateObject private var viewModel: OnboardingViewModel
     @StateObject private var permissions = PermissionsManager()
     @EnvironmentObject private var appState: AppState
     @State private var step: OnboardingStep
     /// The furthest step visited, so the stepper can go forward again after going back.
     @State private var furthest: OnboardingStep
-    @State private var inputMonitoringGranted = CGPreflightListenEventAccess()
+    @State private var inputMonitoringGranted = Self.readInputMonitoring()
+    @Environment(\.locale) private var locale
 
     private let keyboardLayoutInfo: KeyboardLayoutInfo? = KeyboardLayoutProvider.shared.resolveInfo()
     /// PermissionsManager polls the microphone and Accessibility; Input Monitoring has no
     /// notification either, so it is re-read on the same rhythm while its row is on screen.
     private let inputMonitoringPoll = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    init(initialStep: OnboardingStep = .shortcut) {
+    /// `viewModel` is for the snapshot probe, which stages what this Mac has.
+    init(initialStep: OnboardingStep = .shortcut, viewModel: OnboardingViewModel? = nil) {
+        _viewModel = StateObject(wrappedValue: viewModel ?? OnboardingViewModel())
         _step = State(initialValue: initialStep)
         _furthest = State(initialValue: initialStep)
     }
@@ -53,10 +56,16 @@ struct OnboardingView: View {
         .background(STheme.windowBg.ignoresSafeArea())
         .ignoresSafeArea(.container, edges: .top)
         .tint(STheme.accent)
-        .onChange(of: step) { _, newStep in furthest = max(furthest, newStep) }
+        .onChange(of: step) { oldStep, newStep in
+            viewModel.stepDidChange(from: oldStep)
+            furthest = max(furthest, newStep)
+        }
+        // Covers the window being closed too, which no button of the view sees. Quitting skips
+        // it on purpose: onboarding runs again on the next launch.
+        .onDisappear { viewModel.onboardingWillClose() }
         .onReceive(inputMonitoringPoll) { _ in
             guard step == .permissions else { return }
-            inputMonitoringGranted = CGPreflightListenEventAccess()
+            inputMonitoringGranted = Self.readInputMonitoring()
         }
     }
 
@@ -89,11 +98,20 @@ struct OnboardingView: View {
                 .scaledFont(size: 30, weight: .bold)
                 .foregroundColor(STheme.textBright)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(step.subtitle)
+            Text(subtitle)
                 .scaledFont(size: 16)
                 .foregroundColor(STheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    /// The model step promises one download, which Apple's model, preselected when offered,
+    /// does not need.
+    private var subtitle: LocalizedStringKey {
+        if step == .model && viewModel.appleSpeechRow != nil {
+            return "Built into macOS, or one download away. Either way, dictation runs on this Mac."
+        }
+        return step.subtitle
     }
 
     @ViewBuilder private var stepContent: some View {
@@ -104,11 +122,12 @@ struct OnboardingView: View {
             OnboardingModelStep(viewModel: viewModel)
         case .permissions:
             OnboardingPermissionsStep(permissions: permissions,
-                                      needsInputMonitoring: needsInputMonitoring,
+                                      needsInputMonitoring: viewModel.needsInputMonitoring,
+                                      triggerLabel: triggerCaps.joined(separator: " "),
                                       inputMonitoringGranted: inputMonitoringGranted,
                                       allGranted: permissionsGranted)
         case .firstTry:
-            OnboardingFirstTryStep(triggerKeys: triggerKeys,
+            OnboardingFirstTryStep(triggerCaps: triggerCaps,
                                    microphoneGranted: permissions.isMicrophonePermissionGranted)
         }
     }
@@ -182,23 +201,29 @@ struct OnboardingView: View {
         step != .firstTry && isPassable(.model)
     }
 
-    private var needsInputMonitoring: Bool {
-        viewModel.selectedShortcut == .rightOption
-    }
-
     private var permissionsGranted: Bool {
         permissions.isMicrophonePermissionGranted && permissions.isAccessibilityPermissionGranted
-            && (!needsInputMonitoring || inputMonitoringGranted)
+            && (!viewModel.needsInputMonitoring || inputMonitoringGranted)
     }
 
-    private var triggerKeys: String {
-        switch viewModel.selectedShortcut {
-        case .rightOption: return OnboardingShortcutLabel.rightOption
-        case .keyCombination: return OnboardingShortcutLabel.combination(layout: keyboardLayoutInfo)
+    private var triggerCaps: [String] {
+        if let trigger = viewModel.effectiveTrigger, trigger != viewModel.combination {
+            return OnboardingShortcutLabel.caps(for: trigger, locale: locale)
         }
+        return OnboardingShortcutLabel.combinationCaps(viewModel.combination, layout: keyboardLayoutInfo,
+                                                       locale: locale)
+    }
+
+    private static func readInputMonitoring() -> Bool {
+        #if DEBUG
+        // The snapshot probe's staged permissions: nothing of this Mac's is read.
+        if PermissionsManager.snapshotGrantsAll { return true }
+        #endif
+        return CGPreflightListenEventAccess()
     }
 
     private func finish() {
+        viewModel.onboardingWillClose()
         appState.hasCompletedOnboarding = true
     }
 }

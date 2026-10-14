@@ -53,6 +53,14 @@ struct OnboardingStepper: View {
     let select: (OnboardingStep) -> Void
 
     var body: some View {
+        // In a narrow window or at a large text size, only the current step keeps its name.
+        ViewThatFits(in: .horizontal) {
+            row(namesEveryStep: true)
+            row(namesEveryStep: false)
+        }
+    }
+
+    private func row(namesEveryStep: Bool) -> some View {
         HStack(spacing: 12) {
             ForEach(OnboardingStep.allCases, id: \.self) { step in
                 if step != .shortcut {
@@ -61,12 +69,12 @@ struct OnboardingStepper: View {
                         .frame(minWidth: 12, maxWidth: .infinity)
                         .frame(height: 1)
                 }
-                item(step)
+                item(step, named: namesEveryStep || step == current)
             }
         }
     }
 
-    private func item(_ step: OnboardingStep) -> some View {
+    private func item(_ step: OnboardingStep, named: Bool) -> some View {
         let isCurrent = step == current
         let isDone = step < current
         return Button { if !isCurrent { select(step) } } label: {
@@ -87,16 +95,19 @@ struct OnboardingStepper: View {
                     }
                 }
                 .frame(width: 26, height: 26)
-                Text(step.title)
-                    .scaledFont(size: 14, weight: isCurrent ? .semibold : .medium)
-                    .foregroundColor(isCurrent ? STheme.accent : isDone ? STheme.textSecondary : STheme.hint)
-                    .lineLimit(1)
-                    .fixedSize()
+                if named {
+                    Text(step.title)
+                        .scaledFont(size: 14, weight: isCurrent ? .semibold : .medium)
+                        .foregroundColor(isCurrent ? STheme.accent : isDone ? STheme.textSecondary : STheme.hint)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!isCurrent && !isReachable(step))
         .accessibilityAddTraits(isCurrent ? .isSelected : [])
+        .accessibilityLabel(Text(step.title))
     }
 }

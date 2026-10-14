@@ -76,6 +76,7 @@ enum UISnapshotProbe {
         "settings-appearance-list": { scrolled(.appearance, to: "Order and display") },
         "settings-appearance-notch": { scrolled(.appearance, to: "Notch opening width") },
         "agent-panel": { AgentPanelSnapshot.make(focused: true) },
+        "agent-panel-large-text": { AgentPanelSnapshot.make(focused: true, textScale: TextScale.maximum) },
         "agent-panel-selection": { AgentPanelSnapshot.make(selecting: true) },
         "agent-panel-draft": { AgentPanelSnapshot.make(draft: "Yes, open it and ask for a review.") },
         "agent-panel-permission": { AgentPanelSnapshot.make(showing: .permission) },
@@ -195,7 +196,7 @@ enum UISnapshotProbe {
         }
         seedRecordings()
 
-        var all = screens
+        var all = screens.merging(onboardingScreens) { current, _ in current }
         for rubric in SettingsRubric.allCases {
             all["settings-\(rubric.rawValue)"] = {
                 AdvancedRubrics.shared.set(rubric.rawValue, false)
