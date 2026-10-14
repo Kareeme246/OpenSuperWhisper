@@ -4,8 +4,9 @@ import XCTest
 @testable import OpenSuperWhisperCore
 
 /// Covers reading the field around the caret for #163: splitting a value at the UTF-16 range
-/// Accessibility reports, and the step that decides whether a dictation is fitted at all. The
-/// field is always a fake: nothing here reads another app.
+/// Accessibility reports, the window fetched instead of the whole value, and the step that
+/// decides whether and how a dictation is fitted. The field is always a fake: nothing here reads
+/// another app.
 @MainActor
 final class TextAroundCaretTests: XCTestCase {
 
@@ -81,6 +82,49 @@ final class TextAroundCaretTests: XCTestCase {
         let trailing = "x" + String(repeating: "a", count: TextAroundCaret.lookaheadLength - 1) + "😀b"
         XCTAssertEqual(TextAroundCaret(value: trailing, selection: NSRange(location: 1, length: 0))?.after,
                        String(repeating: "a", count: TextAroundCaret.lookaheadLength - 1))
+    }
+
+    // MARK: - Fetching only a window
+
+    func testWindowCoversTheContextAndAMarginAroundTheSelection() {
+        let margin = TextAroundCaret.edgeMargin
+        XCTAssertEqual(TextAroundCaret.window(around: NSRange(location: 5_000, length: 10), length: 10_000),
+                       NSRange(location: 5_000 - TextAroundCaret.contextLength - margin,
+                               length: TextAroundCaret.contextLength + 10 + TextAroundCaret.lookaheadLength + 2 * margin))
+    }
+
+    func testWindowStopsAtTheEndsOfTheField() {
+        XCTAssertEqual(TextAroundCaret.window(around: NSRange(location: 3, length: 0), length: 10),
+                       NSRange(location: 0, length: 10))
+    }
+
+    func testWindowOfASelectionOutsideTheFieldIsNil() {
+        XCTAssertNil(TextAroundCaret.window(around: NSRange(location: 11, length: 0), length: 10))
+        XCTAssertNil(TextAroundCaret.window(around: NSRange(location: 8, length: 3), length: 10))
+        XCTAssertNil(TextAroundCaret.window(around: NSRange(location: NSNotFound, length: 0), length: 10))
+    }
+
+    /// Reading only the window must give what reading the whole value gives, emoji at the cut
+    /// edges included.
+    func testAWindowSplitsLikeTheWholeValue() {
+        let context = TextAroundCaret.contextLength, lookahead = TextAroundCaret.lookaheadLength
+        let values: [(String, NSRange)] = [
+            ("Hello world", NSRange(location: 5, length: 0)),
+            (String(repeating: "a", count: 5_000) + String(repeating: "b", count: 5_000),
+             NSRange(location: 5_000, length: 3)),
+            ("xxx😀" + String(repeating: "a", count: context - 1),
+             NSRange(location: 5 + context - 1, length: 0)),
+            ("xxx" + String(repeating: "a", count: lookahead - 1) + "😀b" + String(repeating: "c", count: 50),
+             NSRange(location: 3, length: 0)),
+            ("👨‍👩‍👧‍👦" + String(repeating: "a", count: context) + "👨‍👩‍👧‍👦",
+             NSRange(location: ("👨‍👩‍👧‍👦" as NSString).length + context, length: 0)),
+        ]
+        for (value, selection) in values {
+            let text = value as NSString
+            let window = TextAroundCaret.window(around: selection, length: text.length)!
+            XCTAssertEqual(TextAroundCaret(window: text.substring(with: window), at: window.location, selection: selection),
+                           TextAroundCaret(value: value, selection: selection))
+        }
     }
 
     // MARK: - Preparing the text
