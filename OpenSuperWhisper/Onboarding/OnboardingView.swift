@@ -60,7 +60,8 @@ struct OnboardingView: View {
             viewModel.stepDidChange(from: oldStep)
             furthest = max(furthest, newStep)
         }
-        // Covers the window being closed too, which no button of the view sees.
+        // Covers the window being closed too, which no button of the view sees. Quitting skips
+        // it on purpose: onboarding runs again on the next launch.
         .onDisappear { viewModel.onboardingWillClose() }
         .onReceive(inputMonitoringPoll) { _ in
             guard step == .permissions else { return }

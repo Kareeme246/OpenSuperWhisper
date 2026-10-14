@@ -201,10 +201,10 @@ private struct ShortcutChoiceCard<Accessory: View>: View {
                         }
                     }
                 }
-                // Up to the check mark (16 pt in, 18 wide) and no further; the keys run closer to
-                // it than the text, so three keys and their names share a line on a card a third
-                // of the window wide.
-                .padding(.trailing, 14)
+                // Clear of the check mark (16 pt in, 18 wide) by a hair; the keys run closer to it
+                // than the text, so three keys and their names share a line on a card a third of
+                // the window wide.
+                .padding(.trailing, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
