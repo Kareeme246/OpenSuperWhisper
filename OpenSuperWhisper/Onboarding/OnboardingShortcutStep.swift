@@ -47,7 +47,7 @@ struct OnboardingShortcutStep: View {
     /// Stacked, each card sets its keys beside its text, so the three stay short.
     @ViewBuilder private func cards(idealWidth: CGFloat?, stacked: Bool = false) -> some View {
         ShortcutChoiceCard(
-            keys: Text(verbatim: OnboardingShortcutLabel.rightOption(locale: locale)),
+            keys: .keys(RecordingTrigger.modifier(.rightOption).namedKeys(locale: locale)),
             title: "The right Option key",
             detail: "Simple. Needs a macOS permission.",
             selected: viewModel.selectedShortcut == .rightOption,
@@ -55,7 +55,8 @@ struct OnboardingShortcutStep: View {
         ) { viewModel.selectedShortcut = .rightOption }
         .frame(idealWidth: idealWidth)
         ShortcutChoiceCard(
-            keys: Text(verbatim: OnboardingShortcutLabel.combination(viewModel.combination, layout: layoutInfo, locale: locale)),
+            keys: .keys(OnboardingShortcutLabel.combinationKeys(viewModel.combination, layout: layoutInfo,
+                                                                locale: locale)),
             title: "A key combination",
             detail: "No extra permission.",
             selected: viewModel.selectedShortcut == .keyCombination,
@@ -69,8 +70,7 @@ struct OnboardingShortcutStep: View {
     private func customCard(stacked: Bool) -> some View {
         let recorded = viewModel.customTrigger
         return ShortcutChoiceCard(
-            keys: recorded.map { Text(verbatim: OnboardingShortcutLabel.caps(for: $0, locale: locale).joined(separator: " ")) }
-                ?? Text("Custom"),
+            keys: recorded.map { .keys($0.namedKeys(locale: locale)) } ?? .placeholder("Custom"),
             title: "Your own shortcut",
             detail: customDetail(recorded),
             selected: viewModel.selectedShortcut == .custom,
@@ -109,18 +109,8 @@ struct OnboardingShortcutStep: View {
 
 /// How the shortcut choices are spelled on screen.
 enum OnboardingShortcutLabel {
-    /// "⌥ right", as Home writes it.
-    @MainActor static func rightOption(locale: Locale) -> String {
-        HomeTriggerSummary.label(for: .rightOption, locale: locale)
-    }
-
     /// The combination the second card offers, else the default one (⌥ and the key left of 1)
     /// in the user's keyboard layout.
-    @MainActor static func combination(_ combination: RecordingTrigger?, layout: KeyboardLayoutInfo?,
-                                       locale: Locale) -> String {
-        combinationCaps(combination, layout: layout, locale: locale).joined(separator: " ")
-    }
-
     @MainActor static func combinationCaps(_ combination: RecordingTrigger?, layout: KeyboardLayoutInfo?,
                                            locale: Locale) -> [String] {
         if let combination { return caps(for: combination, locale: locale) }
@@ -133,10 +123,24 @@ enum OnboardingShortcutLabel {
         if case .modifier(let key) = trigger { return [HomeTriggerSummary.label(for: key, locale: locale)] }
         return trigger.caps
     }
+
+    /// The second card's keys, each with its name, so "⌥" reads as Option at a glance.
+    @MainActor static func combinationKeys(_ combination: RecordingTrigger?, layout: KeyboardLayoutInfo?,
+                                           locale: Locale) -> [NamedKey] {
+        if let combination { return combination.namedKeys(locale: locale) }
+        return [KeyNames.modifier(symbol: "⌥", locale: locale),
+                KeyNames.key(cap: layout?.labels[50] ?? "`", locale: locale)]
+    }
+}
+
+/// What a card shows above its title: the shortcut's keys, or a word while there is none yet.
+enum ShortcutCardKeys {
+    case keys([NamedKey])
+    case placeholder(LocalizedStringKey)
 }
 
 private struct ShortcutChoiceCard<Accessory: View>: View {
-    let keys: Text
+    let keys: ShortcutCardKeys
     let title: LocalizedStringKey
     let detail: LocalizedStringKey
     let selected: Bool
@@ -152,9 +156,16 @@ private struct ShortcutChoiceCard<Accessory: View>: View {
             Button(action: action) {
                 Group {
                     if stacked {
-                        HStack(alignment: .firstTextBaseline, spacing: 16) {
-                            keysLabel.frame(minWidth: 120 * textScale, alignment: .leading)
-                            explanation
+                        // Keys beside the text while both fit on a line, else above it.
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .top, spacing: 16) {
+                                keysLabel.fixedSize().frame(minWidth: 120 * textScale, alignment: .leading)
+                                explanation
+                            }
+                            VStack(alignment: .leading, spacing: 14) {
+                                keysLabel
+                                explanation
+                            }
                         }
                     } else {
                         VStack(alignment: .leading, spacing: 14) {
@@ -163,7 +174,9 @@ private struct ShortcutChoiceCard<Accessory: View>: View {
                         }
                     }
                 }
-                .padding(.trailing, 22)
+                // Clear of the check mark; the keys run closer to it than the text, so three
+                // caps still share a line on a card a third of the window wide.
+                .padding(.trailing, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
@@ -189,12 +202,26 @@ private struct ShortcutChoiceCard<Accessory: View>: View {
         .onTapGesture(perform: action)
     }
 
-    private var keysLabel: some View {
-        keys
-            .scaledFont(size: 24, weight: .bold)
-            .foregroundColor(STheme.textBright)
-            .lineLimit(1)
-            .minimumScaleFactor(0.6)
+    @ViewBuilder private var keysLabel: some View {
+        switch keys {
+        case .keys(let named):
+            NamedKeyRow(keys: named)
+        case .placeholder(let word):
+            // An empty cap where the recorded keys will go, so the three titles stay level.
+            VStack(alignment: .leading, spacing: 6) {
+                Image(systemName: "plus")
+                    .scaledFont(size: 15, weight: .semibold)
+                    .foregroundColor(STheme.hint)
+                    .frame(width: 40 * textScale, height: 40 * textScale)
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(STheme.border, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])))
+                    .padding(.bottom, 2)
+                    .accessibilityHidden(true)
+                Text(word)
+                    .scaledFont(size: 11, weight: .medium)
+                    .foregroundColor(STheme.hint)
+            }
+        }
     }
 
     private var explanation: some View {
@@ -208,14 +235,40 @@ private struct ShortcutChoiceCard<Accessory: View>: View {
                 .foregroundColor(STheme.hint)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(.trailing, 6)
     }
 }
 
 extension ShortcutChoiceCard where Accessory == EmptyView {
-    init(keys: Text, title: LocalizedStringKey, detail: LocalizedStringKey, selected: Bool,
+    init(keys: ShortcutCardKeys, title: LocalizedStringKey, detail: LocalizedStringKey, selected: Bool,
          stacked: Bool, action: @escaping () -> Void) {
         self.init(keys: keys, title: title, detail: detail, selected: selected, stacked: stacked,
                   action: action, accessory: { EmptyView() })
+    }
+}
+
+/// A shortcut drawn key by key, each cap with its name under it. Wraps to a second line rather
+/// than squeezing the caps when the card is narrow or the text large; the caps of a line share
+/// its top, so they stay level whatever their names' length.
+private struct NamedKeyRow: View {
+    let keys: [NamedKey]
+
+    var body: some View {
+        FlowLayout(spacing: 7, lineSpacing: 12) {
+            ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
+                // Leading, like the card's text: the first cap lines up with the title.
+                VStack(alignment: .leading, spacing: 6) {
+                    SKeyCap(key.cap, symbol: key.symbol, style: .hero)
+                    Text(verbatim: key.name)
+                        .scaledFont(size: 11, weight: .medium)
+                        .foregroundColor(STheme.hint)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: keys.map(\.name).joined(separator: ", ")))
     }
 }
 

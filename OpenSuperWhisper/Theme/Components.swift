@@ -553,16 +553,50 @@ struct STextField: View {
 
 /// A key or key combination, drawn as a raised cap ("⌥ right", "Esc").
 struct SKeyCap: View {
+    /// `.hero` is the same cap drawn large, for a shortcut that is the subject of a screen.
+    enum Style { case inline, hero }
+
     let text: String
-    init(_ text: String) { self.text = text }
+    var symbol: String? = nil
+    var style: Style = .inline
+    @Environment(\.textScaleFactor) private var textScale
+
+    init(_ text: String, symbol: String? = nil, style: Style = .inline) {
+        self.text = text
+        self.symbol = symbol
+        self.style = style
+    }
+
     var body: some View {
-        Text(text)
-            .scaledFont(size: 13, weight: .semibold)
-            .foregroundColor(STheme.textBright)
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(STheme.controlBg))
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(STheme.border, lineWidth: 1))
-            .fixedSize()
+        switch style {
+        case .inline:
+            label
+                .scaledFont(size: 13, weight: .semibold)
+                .foregroundColor(STheme.textBright)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(STheme.controlBg))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(STheme.border, lineWidth: 1))
+                .fixedSize()
+        case .hero:
+            let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+            label
+                .scaledFont(size: 19, weight: .semibold)
+                .foregroundColor(STheme.textBright)
+                .lineLimit(1)
+                .padding(.horizontal, 11)
+                .frame(minWidth: 40 * textScale, minHeight: 40 * textScale)
+                .background(shape.fill(STheme.controlBg))
+                // A firmer lower edge, so the cap reads as a key rather than a tag.
+                .overlay(shape.strokeBorder(STheme.border, lineWidth: 1))
+                .background(shape.fill(STheme.border).offset(y: 2))
+                .padding(.bottom, 2)
+                .fixedSize()
+        }
+    }
+
+    private var label: Text {
+        guard let symbol else { return Text(verbatim: text) }
+        return Text(Image(systemName: symbol)) + Text(verbatim: text.isEmpty ? "" : " " + text)
     }
 }
 
