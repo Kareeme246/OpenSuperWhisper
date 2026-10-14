@@ -109,6 +109,9 @@ struct AgentShortcutHints {
 /// when the hook could not tell where that is.
 struct AgentOpenHostButton: View {
     let request: AgentRequest
+    /// The host's name, looked up once per request: the lookup asks LaunchServices, and the
+    /// header is redrawn on every keystroke in the reply.
+    @State private var hostName: (requestID: String, name: String?)?
 
     var body: some View {
         if let target = AgentHostJump.target(for: request) {
@@ -122,13 +125,11 @@ struct AgentOpenHostButton: View {
             }
             .buttonStyle(.plain)
             .pointerCursorOnHover()
-            .accessibilityLabel(Text("Open in terminal"))
-            .help(tooltip(for: target))
+            .accessibilityLabel(name.map { Text("Open in \($0)") } ?? Text("Open in terminal"))
+            .help(name.map { Text("Open in \($0) (⌘O)") } ?? Text("Open in terminal (⌘O)"))
+            .task(id: request.id) { hostName = (request.id, WorkspaceHostOpener.appName(of: target)) }
         }
     }
 
-    private func tooltip(for target: AgentHostJump.Target) -> Text {
-        guard let name = WorkspaceHostOpener.appName(of: target) else { return Text("Open in terminal (⌘O)") }
-        return Text("Open in \(name) (⌘O)")
-    }
+    private var name: String? { hostName?.requestID == request.id ? hostName?.name : nil }
 }

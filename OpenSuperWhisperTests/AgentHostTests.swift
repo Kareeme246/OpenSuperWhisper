@@ -44,11 +44,34 @@ final class AgentHostTests: XCTestCase {
             "warp://session:80/\(paneID)",
             "warp://session",
             "",
+            // What URL parsing decodes or tolerates, which a check on the raw text would miss.
+            "warp://session/\(paneID)/",
+            "warp://session//\(paneID)",
+            "warp://session/\(paneID)%2F",
+            "warp://session/\(paneID)%3Fa=b",
+            "warp://session/\(paneID)?",
+            "warp://session/\(paneID)#",
+            "warp://@session/\(paneID)",
+            "warp://session/\(paneID.dropLast())\u{FF10}",  // a fullwidth zero
+            "warp://session./\(paneID)",
         ]
         for link in rejected {
             XCTAssertNil(AgentHostCapture.focusURL(link), link)
         }
         XCTAssertNil(AgentHostCapture.focusURL(nil))
+    }
+
+    /// What gets opened is rebuilt from the parts that were checked, never the text as given.
+    func testAnAcceptedLinkIsRebuiltInItsPlainForm() {
+        let accepted = [
+            "WARP://SESSION/\(paneID)",
+            "warp://session/%30\(paneID.dropFirst())",
+            "warp://sess%69on/\(paneID)",
+            "warp://session:/\(paneID)",
+        ]
+        for link in accepted {
+            XCTAssertEqual(AgentHostCapture.focusURL(link)?.absoluteString, paneLink, link)
+        }
     }
 
     // MARK: Capture
@@ -104,6 +127,21 @@ final class AgentHostTests: XCTestCase {
         XCTAssertNil(AgentHostCapture.capture(environment: environment, from: 500, processes: warpTree).focusURL)
     }
 
+    /// GNU screen, dtach, or an agent left to launchd: the chain breaks before Warp, as with
+    /// tmux, but nothing in the environment says so. The link is then the one of the pane that
+    /// started it, so only the app is kept.
+    func testAWalkThatNeverReachesWarpKeepsOnlyTheApp() {
+        let detached = FakeProcessTable(parents: [500: 400, 400: 1], apps: [:])
+        let host = AgentHostCapture.capture(environment: warpEnvironment, from: 500, processes: detached)
+        XCTAssertNil(host.focusURL)
+        XCTAssertEqual(host.bundleID, "dev.warp.Warp-Stable")
+        XCTAssertNil(host.pid)
+
+        var environment = warpEnvironment
+        environment["STY"] = "1234.ttys001.mac"
+        XCTAssertNil(AgentHostCapture.capture(environment: environment, from: 500, processes: warpTree).focusURL)
+    }
+
     func testNothingKnownMeansNoHost() {
         let host = AgentHostCapture.capture(environment: ["HOME": "/Users/me"], from: 500,
                                             processes: FakeProcessTable(parents: [500: 1], apps: [:]))
@@ -129,8 +167,10 @@ final class AgentHostTests: XCTestCase {
     /// Written by the real hook path, with this process's own environment: only the three
     /// host fields join the request, never the variables they came from.
     func testTheRequestFileHoldsTheHostAndNothingElseOfTheEnvironment() throws {
+        // A whole second: a date with a fraction can come back a hair off through the file.
         var request = try XCTUnwrap(AgentHookCommand.makeStopRequest(
-            from: try JSONSerialization.data(withJSONObject: ["session_id": "s", "cwd": "/p"])))
+            from: try JSONSerialization.data(withJSONObject: ["session_id": "s", "cwd": "/p"]),
+            now: Date(timeIntervalSince1970: 1_000)))
         request.focusURL = paneLink
         request.hostBundleID = "dev.warp.Warp-Stable"
         request.hostPID = 200

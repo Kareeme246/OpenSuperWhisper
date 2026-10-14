@@ -31,7 +31,8 @@ final class AgentPanelController {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.window is AgentPanel,
-               event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+               // Not the whole device-independent mask: Caps Lock is in it.
+               event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
                event.charactersIgnoringModifiers?.lowercased() == "o",
                let request = AgentInbox.shared.current {
                 return AgentHostJump.open(request) ? nil : event
@@ -239,12 +240,9 @@ struct AgentPanelView: View {
                     .lineLimit(1)
                 // Redrawn every half minute so "2 minutes ago" keeps counting while it waits.
                 TimelineView(.periodic(from: .now, by: 30)) { context in
-                    Text(subtitle(for: request, now: context.date))
+                    subtitle(for: request, now: context.date)
                         .scaledFont(size: 12.5)
                         .foregroundColor(STheme.hint)
-                        .lineLimit(1)
-                        // The age is what changes; the project name can give way first.
-                        .truncationMode(.middle)
                 }
             }
             Spacer(minLength: 8)
@@ -267,6 +265,7 @@ struct AgentPanelView: View {
         }
         .buttonStyle(.plain)
         .pointerCursorOnHover()
+        .accessibilityLabel(Text("Close"))
         .help("Let it stop: the agent waits in its terminal, as it would without OpenSuperWhisper")
     }
 
@@ -394,13 +393,31 @@ struct AgentPanelView: View {
         .pointerCursorOnHover()
     }
 
-    private func subtitle(for request: AgentRequest, now: Date) -> String {
+    /// When the header runs short the agent's name goes first (its avatar already says it),
+    /// then the project's is cut in the middle: the project is what tells sessions apart. The
+    /// age is never cut.
+    private func subtitle(for request: AgentRequest, now: Date) -> some View {
         let formatter = RelativeDateTimeFormatter()
         formatter.dateTimeStyle = .named  // "now" rather than "in 0 seconds"
         formatter.unitsStyle = .short  // "40 sec. ago" leaves room for the pager
         let age = formatter.localizedString(for: min(request.createdAt, now), relativeTo: now)
-        let project = request.title == nil ? "" : " · \(request.projectName)"
-        return "\(request.agent)\(project) · \(age)"
+        let project = request.title == nil ? nil : request.projectName
+        // Whole names or none: a name squeezed to its first letter reads as a stray glyph.
+        return ViewThatFits(in: .horizontal) {
+            Text(verbatim: ([request.agent] + [project, age].compactMap { $0 }).joined(separator: " · "))
+                .lineLimit(1)
+            HStack(spacing: 0) {
+                if let project {
+                    Text(verbatim: "\(project) · ")
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Text(verbatim: age)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .layoutPriority(1)
+            }
+        }
     }
 
     private func pager(for request: AgentRequest) -> some View {

@@ -18270,6 +18270,16 @@
           }
         }
       }
+    },
+    "Open in %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir dans %@"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

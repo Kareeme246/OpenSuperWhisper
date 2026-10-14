@@ -41,9 +41,12 @@ protocol AgentHostOpening {
 }
 
 @MainActor
-struct WorkspaceHostOpener: AgentHostOpening {
-    /// Nonisolated so it can be `open`'s default argument.
+final class WorkspaceHostOpener: AgentHostOpening {
+    /// Nonisolated so it can be `open`'s default argument. One opener per jump: it remembers
+    /// that it already took activation for it.
     nonisolated init() {}
+
+    private var holdsActivation = false
 
     /// The app with this pid when it is still the same app (a pid can be reused once it
     /// quits), else any running copy of the bundle.
@@ -66,16 +69,27 @@ struct WorkspaceHostOpener: AgentHostOpening {
         return url.map { $0.deletingPathExtension().lastPathComponent }
     }
 
-    /// The panel never activates OpenSuperWhisper, so the click leaves it inactive, and since
-    /// macOS 14 activation is cooperative: an app may be refused when it raises another while
-    /// not active itself. Yielding first hands our activation to the host; if the system still
-    /// turns the request down, LaunchServices brings a running app forward the way the Dock or
-    /// `open -a` would.
+    /// Since macOS 14 activation is cooperative: an app comes forward when the active app
+    /// yields to it, and only the active app has anything to yield. The panel never activates
+    /// OpenSuperWhisper, so at the click the browser or whatever else is in front holds it, and
+    /// a yield from here would hand over nothing. The click (or ⌘O) is the user's input in our
+    /// own window, which is what lets us take activation first; the host's request then takes
+    /// it from us at once. Done once per jump, so the pane link that follows does not take it
+    /// back from the app just raised.
+    private func takeActivation() {
+        guard !holdsActivation else { return }
+        holdsActivation = true
+        if !NSApp.isActive { NSApp.activate() }
+    }
+
+    /// If the system still turns the request down, LaunchServices brings a running app forward
+    /// the way the Dock or `open -a` would.
     @discardableResult
     func activate(pid: Int32?, bundleID: String?) -> Bool {
         guard let app = Self.runningApp(pid: pid, bundleID: bundleID) else { return false }
+        takeActivation()
         NSApp.yieldActivation(to: app)
-        if app.activate(from: .current, options: []) { return true }
+        if app.activate(options: []) { return true }
         guard let url = app.bundleURL else { return false }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
@@ -83,9 +97,10 @@ struct WorkspaceHostOpener: AgentHostOpening {
         return true
     }
 
-    /// Warp raises the window, picks the tab and focuses the pane itself; the yield lets it
-    /// come forward while OpenSuperWhisper is not the active app.
+    /// Warp raises the window, picks the tab and focuses the pane itself, coming forward on
+    /// the activation we yield to it.
     func open(_ url: URL) {
+        takeActivation()
         if let handler = NSWorkspace.shared.urlForApplication(toOpen: url),
            let bundleID = Bundle(url: handler)?.bundleIdentifier {
             NSApp.yieldActivation(toApplicationWithBundleIdentifier: bundleID)

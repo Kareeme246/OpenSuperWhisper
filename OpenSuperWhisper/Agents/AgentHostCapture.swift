@@ -28,12 +28,14 @@ enum AgentHostCapture {
     static func capture(environment: [String: String], from pid: Int32 = getppid(),
                         processes: ProcessTable = LiveProcessTable()) -> Host {
         let app = hostApp(above: pid, in: processes)
-        // The walk can break before reaching an app: a tmux or zellij server is a daemon whose
-        // parent is launchd. The bundle id LaunchServices gave the terminal's shell is still in
-        // the environment then, without a pid; when both are there, the walk wins, since an
-        // editor started from a terminal inherits the terminal's.
+        // The walk can break before reaching an app: a tmux, zellij or screen server is a daemon
+        // whose parent is launchd. The bundle id LaunchServices gave the terminal's shell is
+        // still in the environment then, without a pid; when both are there, the walk wins,
+        // since an editor started from a terminal inherits the terminal's.
         let bundleID = app?.bundleID ?? environment["__CFBundleIdentifier"].flatMap { $0.isEmpty ? nil : $0 }
-        let inWarpPane = isWarpPane(environment: environment, hostBundleID: bundleID)
+        // The link, though, only from a walk that reached Warp itself: a broken chain means a
+        // server in between, started from some pane whose link every later session inherits.
+        let inWarpPane = isWarpPane(environment: environment, walkedToBundleID: app?.bundleID)
         return Host(focusURL: inWarpPane ? focusURL(environment["WARP_FOCUS_URL"]) : nil,
                     bundleID: bundleID, pid: app?.pid)
     }
@@ -59,11 +61,10 @@ enum AgentHostCapture {
     /// shell inherits the variable: an editor opened with `code .` (whose terminal would then
     /// send the user to Warp instead of the editor), a tmux or zellij server (whose panes all
     /// carry the link of whichever pane started the server).
-    static func isWarpPane(environment: [String: String], hostBundleID: String?) -> Bool {
+    static func isWarpPane(environment: [String: String], walkedToBundleID: String?) -> Bool {
         if isInEditor(environment: environment) || isInMultiplexer(environment: environment) { return false }
         if let program = environment["TERM_PROGRAM"], program != "WarpTerminal" { return false }
-        if let hostBundleID, !hostBundleID.hasPrefix(warpBundlePrefix) { return false }
-        return true
+        return walkedToBundleID?.hasPrefix(warpBundlePrefix) == true
     }
 
     /// VS Code and its forks (Cursor, Windsurf) set TERM_PROGRAM and their own VSCODE_ variables
@@ -72,8 +73,9 @@ enum AgentHostCapture {
         environment["TERM_PROGRAM"] == "vscode" || environment.keys.contains { $0.hasPrefix("VSCODE_") }
     }
 
+    /// GNU screen's `STY` too: unlike tmux it leaves TERM_PROGRAM as Warp set it.
     static func isInMultiplexer(environment: [String: String]) -> Bool {
-        environment["TMUX"] != nil || environment["ZELLIJ"] != nil
+        environment["TMUX"] != nil || environment["ZELLIJ"] != nil || environment["STY"] != nil
     }
 
     /// The first app up the process tree from `pid`. Shells, the agent and helpers are passed
