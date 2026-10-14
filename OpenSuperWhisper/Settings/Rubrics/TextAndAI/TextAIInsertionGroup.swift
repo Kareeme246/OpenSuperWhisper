@@ -71,6 +71,11 @@ struct TextAIInsertionGroup: View {
                        advanced: true) {
                 SSwitch(isOn: $viewModel.pasteListsAsRichText)
             }
+            SettingRow("Long prompts in pieces",
+                       hint: "Pastes a long dictation into Claude Code or Codex a few lines at a time, so it shows in full in the prompt instead of as “[Pasted text]”. Only in a terminal whose window title names the agent.",
+                       advanced: true) {
+                SSwitch(isOn: $viewModel.pasteAgentPromptsInPieces)
+            }
             whisperRows
             SettingRow("Per-app exceptions", hint: perAppHint, advanced: true) {
                 Button("Open →") {
