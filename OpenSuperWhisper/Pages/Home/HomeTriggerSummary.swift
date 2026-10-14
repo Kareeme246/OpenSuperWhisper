@@ -43,15 +43,20 @@ struct HomeTriggerSummary: Equatable {
         return nil
     }
 
-    private static func label(for key: ModifierKey) -> String {
+    /// "⌥ right": the short name Home uses, and onboarding too, so both spell a key the same way.
+    /// `locale` lets a view pass its own, which the snapshot probe sets per render.
+    static func label(for key: ModifierKey, locale: Locale = .current) -> String {
+        var name: LocalizedStringResource
         switch key {
         case .leftCommand, .leftOption, .leftShift, .leftControl:
-            return String(localized: "\(key.shortSymbol) left")
+            name = "\(key.shortSymbol) left"
         case .rightCommand, .rightOption, .rightShift, .rightControl:
-            return String(localized: "\(key.shortSymbol) right")
+            name = "\(key.shortSymbol) right"
         case .fn, .none:
             return key.shortSymbol
         }
+        name.locale = locale
+        return String(localized: name)
     }
 }
 

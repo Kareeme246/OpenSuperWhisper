@@ -155,12 +155,7 @@ struct DictationRubric: View {
         let prefs = AppPreferences.shared
         let triggers = RecordingTriggerSet.load(from: prefs.recordingTriggers).triggers
             + RecordingTriggerSet.load(from: prefs.holdRecordingTriggers).triggers
-        modifierTrigger = triggers.first { trigger in
-            switch trigger {
-            case .modifier, .chord: return true
-            default: return false
-            }
-        }?.caps.joined(separator: " ")
+        modifierTrigger = triggers.first(where: \.needsInputMonitoring)?.caps.joined(separator: " ")
     }
 
     private func openPrivacyPane(_ anchor: String) {

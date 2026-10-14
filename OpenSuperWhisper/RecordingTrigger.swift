@@ -53,6 +53,15 @@ enum RecordingTrigger: Equatable, Codable {
         }
     }
 
+    /// A modifier on its own, or a chord of them, is read through an event tap, which macOS
+    /// gates behind Input Monitoring. Combinations go through the hotkey API and need nothing.
+    var needsInputMonitoring: Bool {
+        switch self {
+        case .modifier, .chord: return true
+        case .none, .keyCombo, .mouse: return false
+        }
+    }
+
     static let modifierBadges: [(flag: NSEvent.ModifierFlags, symbol: String)] = [
         (.control, "⌃"), (.option, "⌥"), (.shift, "⇧"), (.command, "⌘"),
     ]
