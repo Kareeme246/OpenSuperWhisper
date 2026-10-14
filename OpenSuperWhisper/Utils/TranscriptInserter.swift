@@ -100,8 +100,9 @@ enum TranscriptInserter {
             // can't read (Messages, Electron), and is a harmless no-op otherwise. So no editable-
             // target gate — it only ever produces false negatives (#paste-messages). A ⌘V that
             // nothing takes is caught afterwards instead, when nobody reads the text (#162).
-            // One event, so there is nothing to pace and nothing to chunk. Logged all the same:
-            // a report has to be able to say which mechanism ran, and a paste that logged
+            // One event, so there is nothing to pace and nothing to chunk, except for a long
+            // prompt to Claude Code or Codex, which goes in a few pieces (#165). Logged all the
+            // same: a report has to be able to say which mechanism ran, and a paste that logged
             // nothing looked exactly like an insertion that never happened.
             let pieces = agentPromptPieces(of: text, into: targetBundleID, windowTitle: windowTitle)
             log(mechanism: pieces.count > 1 ? "paste-pieces" : "paste", chunks: max(pieces.count, 1),
