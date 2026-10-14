@@ -13,7 +13,7 @@ import XCTest
 final class OnboardingModelGateTests: XCTestCase {
 
     private func makeViewModel() -> OnboardingViewModel {
-        let viewModel = OnboardingViewModel()
+        let viewModel = OnboardingViewModel(system: .staged())
         viewModel.unifiedModels = [
             OnboardingUnifiedModel(name: "Whisper", isDownloaded: false, description: "",
                                    type: .whisper(url: URL(string: "https://example.invalid/m.bin")!,

@@ -18240,6 +18240,206 @@
           }
         }
       }
+    },
+    "Already on this Mac for your language. Nothing to download.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déjà sur ce Mac pour votre langue. Rien à télécharger."
+          }
+        }
+      }
+    },
+    "Already on your Mac, or one download away. Either way it runs here.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déjà sur votre Mac, ou à un téléchargement près. Dans les deux cas, tout se passe ici."
+          }
+        }
+      }
+    },
+    "Any key, combination or mouse button.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une touche, une combinaison ou un bouton de souris."
+          }
+        }
+      }
+    },
+    "Best accuracy, 1.6 GB": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meilleure précision, 1,6 Go"
+          }
+        }
+      }
+    },
+    "Built into macOS. Runs on this Mac, no account needed.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intégré à macOS. Tourne sur ce Mac, sans compte."
+          }
+        }
+      }
+    },
+    "Click the field on the card, then press the key or combination you want. A spare mouse button works too.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur le champ de la carte, puis appuyez sur la touche ou la combinaison voulue. Un bouton de souris libre marche aussi."
+          }
+        }
+      }
+    },
+    "Compact and quick. Chinese, English, Japanese, Korean, Cantonese": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compact et rapide. Chinois, anglais, japonais, coréen, cantonais"
+          }
+        }
+      }
+    },
+    "Fastest processing and most accurate, 614 MB": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le plus rapide et le plus précis, 614 Mo"
+          }
+        }
+      }
+    },
+    "More accurate than Apple's model. One download, then it runs on this Mac, no account needed.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus précis que le modèle d'Apple. Un téléchargement, puis il tourne sur ce Mac, sans compte."
+          }
+        }
+      }
+    },
+    "Most compressed, 574 MB": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le plus compressé, 574 Mo"
+          }
+        }
+      }
+    },
+    "Nearly the same accuracy, 874 MB": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presque la même précision, 874 Mo"
+          }
+        }
+      }
+    },
+    "Needs a macOS permission.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nécessite une autorisation macOS."
+          }
+        }
+      }
+    },
+    "Record again": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer à nouveau"
+          }
+        }
+      }
+    },
+    "This shortcut needs no extra permission.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce raccourci ne demande aucune autorisation supplémentaire."
+          }
+        }
+      }
+    },
+    "To notice %@ while another app is in front. macOS asks once, when the app starts listening for the key. Only modifier keys are watched.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pour remarquer %@ quand une autre app est au premier plan. macOS le demande une fois, quand l'app commence à écouter la touche. Seules les touches de modification sont surveillées."
+          }
+        }
+      }
+    },
+    "Your own shortcut": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre propre raccourci"
+          }
+        }
+      }
+    },
+    "key combination…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "combinaison de touches…"
+          }
+        }
+      }
+    },
+    "key or modifier…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "touche ou modificateur…"
+          }
+        }
+      }
+    },
+    "key, modifier or mouse…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "touche, modificateur ou souris…"
+          }
+        }
+      }
+    },
+    "macOS downloads your language the first time you dictate. Nothing to download in the app.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS télécharge votre langue à votre première dictée. Rien à télécharger dans l'app."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
