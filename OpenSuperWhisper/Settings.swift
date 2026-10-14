@@ -797,6 +797,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var matchTextAroundCaret: Bool {
+        didSet {
+            AppPreferences.shared.matchTextAroundCaret = matchTextAroundCaret
+        }
+    }
+
     @Published var submitOnVoiceCommand: Bool {
         didSet {
             AppPreferences.shared.submitOnVoiceCommand = submitOnVoiceCommand
@@ -1014,6 +1020,7 @@ class SettingsViewModel: ObservableObject {
         self.pasteInsteadOfTyping = prefs.pasteInsteadOfTyping
         self.notifyWhenNoPasteTarget = prefs.notifyWhenNoPasteTarget
         self.pasteIntoOriginalField = prefs.pasteIntoOriginalField
+        self.matchTextAroundCaret = prefs.matchTextAroundCaret
         self.submitOnVoiceCommand = prefs.submitOnVoiceCommand
         self.stopPhrase = prefs.stopPhrase
         self.stopPhraseSubmits = prefs.stopPhraseSubmits

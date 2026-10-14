@@ -1,8 +1,8 @@
 import SwiftUI
 import OpenSuperWhisperCore
 
-/// Settings › Privacy: what is written to disk, how long it stays, and where to find the one
-/// setting that reads the screen.
+/// Settings › Privacy: what is written to disk, how long it stays, and where to find the
+/// settings that read the screen.
 struct PrivacyRubric: View {
     @ObservedObject var viewModel: SettingsViewModel
 
@@ -21,6 +21,8 @@ struct PrivacyRubric: View {
               keywords: "retention age days hours conservation supprimer après jours heures"),
         .init(title: "Text around the cursor", rubric: .privacy,
               keywords: "screen context cursor surrounding contexte écran curseur texte autour"),
+        .init(title: "Match the text around the cursor", rubric: .privacy,
+              keywords: "screen read field caret case period space écran lire champ curseur majuscule point espace"),
     ]
 
     var body: some View {
@@ -83,20 +85,38 @@ struct PrivacyRubric: View {
         }
     }
 
-    /// The setting itself lives in Text & AI, next to the model it feeds; privacy-minded people
-    /// look for it here.
+    /// Both settings that read the field live in Text & AI, next to what they feed;
+    /// privacy-minded people look for them here. Each row says only what its own setting reads,
+    /// and "nothing on screen is read" only when neither does.
     private var contextGroup: some View {
         SettingsGroup("On-screen context") {
-            SettingRow("Text around the cursor",
-                       hint: viewModel.useSurroundingTextAsContext
-                        ? "On: the model reads the sentence before your cursor. It stays on your Mac and is never saved."
-                        : "Off: nothing on screen is read.") {
+            SettingRow("Text around the cursor", hint: modelContextHint) {
                 Button("Open in Text & AI") {
                     AppNavigation.shared.openSettings(.textAndAI, focusing: "Use the text around the cursor")
                 }
                 .buttonStyle(.sSecondary)
             }
+            SettingRow("Match the text around the cursor", hint: caretMatchHint) {
+                Button("Open in Text & AI") {
+                    AppNavigation.shared.openSettings(.textAndAI, focusing: "Match the text around the cursor")
+                }
+                .buttonStyle(.sSecondary)
+            }
         }
+    }
+
+    private var modelContextHint: LocalizedStringKey {
+        if viewModel.useSurroundingTextAsContext {
+            return "On: the model reads the sentence before your cursor. It stays on your Mac and is never saved."
+        }
+        return viewModel.matchTextAroundCaret ? "Off: the model is given nothing from the screen."
+                                              : "Off: nothing on screen is read."
+    }
+
+    private var caretMatchHint: LocalizedStringKey {
+        viewModel.matchTextAroundCaret
+            ? "On: the field is read just before inserting, to fit the case, final period and spaces. It stays in memory for that one insertion and is never saved."
+            : "Off: the field is not read before inserting."
     }
 }
 

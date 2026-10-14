@@ -19176,6 +19176,56 @@
           }
         }
       }
+    },
+    "Match the text around the cursor": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accorder au texte autour du curseur"
+          }
+        }
+      }
+    },
+    "Reads the field just before inserting: no capital or final period in the middle of a sentence, and a space where your words meet the ones already there. Fields that can’t be read get the text unchanged.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lit le champ juste avant l’insertion : ni majuscule ni point final au milieu d’une phrase, et une espace là où vos mots rejoignent ceux déjà écrits. Les champs illisibles reçoivent le texte tel quel."
+          }
+        }
+      }
+    },
+    "Off: the field is not read before inserting.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Désactivé : le champ n'est pas lu avant l'insertion."
+          }
+        }
+      }
+    },
+    "Off: the model is given nothing from the screen.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Désactivé : le modèle ne reçoit rien de l'écran."
+          }
+        }
+      }
+    },
+    "On: the field is read just before inserting, to fit the case, final period and spaces. It stays in memory for that one insertion and is never saved.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activé : le champ est lu juste avant l'insertion, pour accorder majuscule, point final et espaces. Il reste en mémoire le temps de cette insertion et n'est jamais enregistré."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

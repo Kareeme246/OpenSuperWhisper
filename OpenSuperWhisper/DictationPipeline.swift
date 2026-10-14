@@ -296,7 +296,8 @@ final class DictationPipeline: ObservableObject {
 
             let delivery: Delivery
             if hasText {
-                delivery = await deliver(text, context: item.context)
+                delivery = await deliver(text, context: item.context,
+                                         language: settings.translateToEnglish ? "en" : settings.selectedLanguage)
             } else if shouldSubmit {
                 delivery = await deliverSubmitOnly(context: item.context)
             } else {
@@ -404,7 +405,9 @@ final class DictationPipeline: ObservableObject {
     }
 
     /// Puts the focus back in the field the dictation started in, then inserts (#164).
-    private func deliver(_ text: String, context: ContextSnapshot) async -> Delivery {
+    ///
+    /// - Parameter language: what the text is written in, for fitting it to the field (#163).
+    private func deliver(_ text: String, context: ContextSnapshot, language: String) async -> Delivery {
         let prefs = AppPreferences.shared
         return await Self.deliver(
             to: context.focusTarget,
@@ -414,7 +417,7 @@ final class DictationPipeline: ObservableObject {
             bringBack: { await FocusReturn.bringBack($0) },
             hold: { TranscriptInserter.holdUndelivered(IndicatorViewModel.applyPostProcessing(text),
                                                        onClipboard: $0) },
-            insert: { self.insertText(text, targetBundleID: context.bundleID) })
+            insert: { self.insertText(text, targetBundleID: context.bundleID, language: language) })
     }
 
     /// A dictation that is only the spoken submit command presses Return in the app it started
@@ -463,9 +466,12 @@ final class DictationPipeline: ObservableObject {
     /// the text on the clipboard and notify ⌘V. When no target is found, typing is skipped. The
     /// insertion policy itself lives in `TranscriptInserter`, shared with the re-paste shortcut.
     @discardableResult
-    private func insertText(_ text: String, targetBundleID: String?) -> Bool {
-        TranscriptInserter.insert(IndicatorViewModel.applyPostProcessing(text),
-                                  honorAutoPastePreference: true,
-                                  targetBundleID: targetBundleID)
+    private func insertText(_ text: String, targetBundleID: String?, language: String) -> Bool {
+        let prefs = AppPreferences.shared
+        let fitToField = prefs.autoPasteTranscription && prefs.matchTextAroundCaret
+        return TranscriptInserter.insert(TranscriptInserter.prepared(text, fitToField: fitToField,
+                                                                     language: language),
+                                         honorAutoPastePreference: true,
+                                         targetBundleID: targetBundleID)
     }
 }

@@ -573,11 +573,16 @@ final class AppPreferences {
 
     /// Apple Intelligence for the language dictations are cleaned up in.
     var appleIntelligenceAvailability: AppleIntelligenceAvailability {
-        AppleIntelligence.availability(language: Self.cleanupLanguage(
+        AppleIntelligence.availability(language: dictationLanguage)
+    }
+
+    /// The language a dictation made now would come out in, as `cleanupLanguage` resolves it.
+    var dictationLanguage: String? {
+        Self.cleanupLanguage(
             stored: whisperLanguage, translateToEnglish: translateToEnglish,
             keyboardLanguage: { [self] in
                 KeyboardLanguage.current(engine: selectedEngine, fluidAudioModelVersion: fluidAudioModelVersion)
-            }))
+            })
     }
 
     /// The language a dictation reaches the cleanup in: English once Whisper has translated it,
@@ -731,6 +736,15 @@ final class AppPreferences {
     /// and then deliberately move to the field the text is meant for.
     @UserDefault(key: "pasteIntoOriginalField", defaultValue: true)
     var pasteIntoOriginalField: Bool
+
+    /// Read the field just before inserting and fit the dictation to it: lowercase in the middle
+    /// of a sentence, no final period before the rest of one, a space where words meet (#163).
+    ///
+    /// Off by default for the reason `useSurroundingTextAsContext` is: this reads the writing
+    /// itself, not a label about it, and that has to be asked for. What it reads stays in memory
+    /// for the one insertion.
+    @UserDefault(key: "matchTextAroundCaret", defaultValue: false)
+    var matchTextAroundCaret: Bool
 
     /// When on, a trailing "press enter" in the dictation is removed from the text and a Return
     /// key is pressed after the text is inserted — submitting the message/prompt (Claude Code,

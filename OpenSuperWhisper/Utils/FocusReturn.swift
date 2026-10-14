@@ -160,7 +160,8 @@ enum FocusReturn {
 /// half dozen requests a refocus makes, so the first request it lets time out ends the attempt:
 /// every later one is skipped and reports failure. A delivery therefore blocks the main thread
 /// for at most one `FocusUtils.axMessagingTimeout`, as the single editability check before it
-/// did.
+/// did, plus one more when "Match the text around the cursor" reads the field afterwards
+/// (`TextAroundCaret.focused`, which keeps to a single timeout the same way).
 @MainActor
 final class LiveFocusControl: FocusControlling {
 

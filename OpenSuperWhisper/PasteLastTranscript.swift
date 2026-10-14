@@ -68,8 +68,10 @@ enum PasteLastTranscript {
         // The target here is whatever is frontmost right now, unlike the pipeline, which uses the
         // app that was frontmost when the clip was recorded. This insertion has no earlier moment
         // to refer back to: the request is being made now, at this window.
+        let prefs = AppPreferences.shared
         let targetMissing = TranscriptInserter.insert(
-            IndicatorViewModel.applyPostProcessing(text),
+            TranscriptInserter.prepared(text, fitToField: prefs.matchTextAroundCaret,
+                                        language: prefs.dictationLanguage),
             honorAutoPastePreference: false,
             targetBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
         if targetMissing {
