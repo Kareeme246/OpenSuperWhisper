@@ -30,11 +30,12 @@ final class MissedPasteWiringTests: XCTestCase {
 
     /// - Returns: what the app in front read, nil when it read nothing.
     @discardableResult
-    private func paste(_ text: String = "transcription", standalone: String? = nil,
-                       keepOnClipboard: Bool = false,
+    private func paste(_ text: String = "transcription", rich: RichPasteText? = nil,
+                       standalone: String? = nil, keepOnClipboard: Bool = false,
                        retryShortcut: String? = nil, takenByTheApp: Bool) -> String? {
         var read: String?
-        TranscriptInserter.pasteThroughClipboard(text, standalone: standalone, keepOnClipboard: keepOnClipboard,
+        TranscriptInserter.pasteThroughClipboard(text, rich: rich, standalone: standalone,
+                                                 keepOnClipboard: keepOnClipboard,
                                                  retryShortcut: retryShortcut, warnWhenMissed: false,
                                                  on: pasteboard, timing: timing,
                                                  paste: { if takenByTheApp { read = readLikeTheTargetApp() } })
@@ -128,6 +129,36 @@ final class MissedPasteWiringTests: XCTestCase {
 
         XCTAssertEqual(TranscriptInserter.unlandedPaste, "Tomorrow.")
         XCTAssertEqual(pasteboard.string(forType: .string), "Tomorrow.")
+    }
+
+    // MARK: - A list pasted as bullets (#166)
+
+    /// A missed list paste is held and kept as the plain sentence: the paste-last shortcut makes
+    /// the rich forms again for whichever app it pastes into, and nothing rich outlives the paste.
+    func testAMissedRichPasteKeepsOnlyThePlainSentence() throws {
+        let fitted = " we need:\n- bread\n- chips"
+        let sentence = "We need:\n- bread\n- chips"
+        let rich = try XCTUnwrap(RichListPaste.richText(for: fitted, into: "com.apple.Notes"))
+
+        paste(fitted, rich: rich, standalone: sentence, keepOnClipboard: true, takenByTheApp: false)
+        waitFor(0.4)
+
+        XCTAssertEqual(TranscriptInserter.unlandedPaste, sentence)
+        XCTAssertEqual(pasteboard.string(forType: .string), sentence)
+        let types = pasteboard.types ?? []
+        XCTAssertFalse(types.contains(.html), "\(types)")
+        XCTAssertFalse(types.contains(.rtf), "\(types)")
+    }
+
+    func testAMissedRichPasteGivesTheClipboardBack() throws {
+        let rich = try XCTUnwrap(RichListPaste.richText(for: "- bread\n- chips", into: "com.apple.Notes"))
+
+        paste("- bread\n- chips", rich: rich, takenByTheApp: false)
+        waitFor(0.4)
+
+        XCTAssertEqual(TranscriptInserter.unlandedPaste, "- bread\n- chips")
+        XCTAssertEqual(pasteboard.string(forType: .string), "original")
+        XCTAssertFalse((pasteboard.types ?? []).contains(.html))
     }
 
     // MARK: - Paste last
