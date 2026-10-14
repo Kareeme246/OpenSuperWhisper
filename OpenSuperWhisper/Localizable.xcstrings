@@ -13581,16 +13581,6 @@
         }
       }
     },
-    "How long the dictation stays on the clipboard for the paste. Raise it if an app sometimes pastes your old item instead.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Durée pendant laquelle la dictée reste dans le presse-papiers pour le collage. Augmentez-la si une app colle parfois votre ancien élément à la place."
-          }
-        }
-      }
-    },
     "How long you stay quiet after the phrase before the dictation ends. Longer is safer if you use it in normal speech.": {
       "localizations": {
         "fr": {
@@ -16251,16 +16241,6 @@
         }
       }
     },
-    "Shows “Copied, press ⌘V” when no text field has the focus.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Affiche « Copié, appuyez sur ⌘V » quand aucun champ de texte n'est actif."
-          }
-        }
-      }
-    },
     "Silence before stopping": {
       "localizations": {
         "fr": {
@@ -17507,16 +17487,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Quand il correspond"
-          }
-        }
-      }
-    },
-    "When off, what you had copied before is put back after the paste.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Désactivé, ce que vous aviez copié avant est remis en place après le collage."
           }
         }
       }
