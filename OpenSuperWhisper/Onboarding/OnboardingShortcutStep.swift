@@ -13,16 +13,20 @@ struct OnboardingShortcutStep: View {
 
     /// Below this width per card, at the designed text size, the three cards stack instead.
     private static let cardIdealWidth: CGFloat = 180
+    /// The tallest keys area of the three cards side by side, so their titles start level.
+    @State private var rowKeysHeight: CGFloat?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             // One choice for the three cards, so their titles stay on the same line or column.
             ViewThatFits(in: .horizontal) {
                 // Fixed vertically so the three cards share the tallest one's height.
-                HStack(alignment: .top, spacing: 14) {
-                    cards(idealWidth: Self.cardIdealWidth * textScale, layout: .keysAbove)
+                HStack(alignment: .top, spacing: 12) {
+                    cards(idealWidth: Self.cardIdealWidth * textScale, layout: .keysAbove,
+                          keysHeight: rowKeysHeight)
                 }
                 .fixedSize(horizontal: false, vertical: true)
+                .onPreferenceChange(ShortcutKeysHeightKey.self) { rowKeysHeight = $0 }
                 VStack(alignment: .leading, spacing: 10) { cards(idealWidth: nil, layout: .keysBeside) }
                 VStack(alignment: .leading, spacing: 10) { cards(idealWidth: nil, layout: .keysAbove) }
             }
@@ -48,13 +52,14 @@ struct OnboardingShortcutStep: View {
         }
     }
 
-    @ViewBuilder private func cards(idealWidth: CGFloat?, layout: ShortcutCardLayout) -> some View {
+    @ViewBuilder private func cards(idealWidth: CGFloat?, layout: ShortcutCardLayout,
+                                    keysHeight: CGFloat? = nil) -> some View {
         ShortcutChoiceCard(
             keys: .keys(RecordingTrigger.modifier(.rightOption).namedKeys(locale: locale)),
             title: "The right Option key",
             detail: "Simple. Needs a macOS permission.",
             selected: viewModel.selectedShortcut == .rightOption,
-            layout: layout
+            layout: layout, keysHeight: keysHeight
         ) { viewModel.selectedShortcut = .rightOption }
         .frame(idealWidth: idealWidth)
         ShortcutChoiceCard(
@@ -63,21 +68,21 @@ struct OnboardingShortcutStep: View {
             title: "A key combination",
             detail: "No extra permission.",
             selected: viewModel.selectedShortcut == .keyCombination,
-            layout: layout
+            layout: layout, keysHeight: keysHeight
         ) { viewModel.selectedShortcut = .keyCombination }
         .frame(idealWidth: idealWidth)
-        customCard(layout: layout)
+        customCard(layout: layout, keysHeight: keysHeight)
             .frame(idealWidth: idealWidth)
     }
 
-    private func customCard(layout: ShortcutCardLayout) -> some View {
+    private func customCard(layout: ShortcutCardLayout, keysHeight: CGFloat?) -> some View {
         let recorded = viewModel.customTrigger
         return ShortcutChoiceCard(
             keys: recorded.map { .keys($0.namedKeys(locale: locale)) } ?? .placeholder("Custom"),
             title: "Your own shortcut",
             detail: customDetail(recorded),
             selected: viewModel.selectedShortcut == .custom,
-            layout: layout
+            layout: layout, keysHeight: keysHeight
         ) {
             viewModel.selectedShortcut = .custom
         } accessory: {
@@ -158,6 +163,8 @@ private struct ShortcutChoiceCard<Accessory: View>: View {
     let detail: LocalizedStringKey
     let selected: Bool
     var layout = ShortcutCardLayout.keysAbove
+    /// Set on cards side by side: their keys area takes this height, the tallest of the three.
+    var keysHeight: CGFloat?
     let action: () -> Void
     @ViewBuilder var accessory: () -> Accessory
     @Environment(\.textScaleFactor) private var textScale
@@ -185,13 +192,19 @@ private struct ShortcutChoiceCard<Accessory: View>: View {
                     case .keysAbove:
                         VStack(alignment: .leading, spacing: 14) {
                             keysLabel
+                                .background(GeometryReader { proxy in
+                                    Color.clear.preference(key: ShortcutKeysHeightKey.self,
+                                                           value: proxy.size.height)
+                                })
+                                .frame(minHeight: keysHeight, alignment: .topLeading)
                             explanation
                         }
                     }
                 }
-                // Clear of the check mark; the keys run closer to it than the text, so three
-                // caps still share a line on a card a third of the window wide.
-                .padding(.trailing, 16)
+                // Up to the check mark (16 pt in, 18 wide) and no further; the keys run closer to
+                // it than the text, so three keys and their names share a line on a card a third
+                // of the window wide.
+                .padding(.trailing, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
@@ -256,9 +269,18 @@ private struct ShortcutChoiceCard<Accessory: View>: View {
 
 extension ShortcutChoiceCard where Accessory == EmptyView {
     init(keys: ShortcutCardKeys, title: LocalizedStringKey, detail: LocalizedStringKey, selected: Bool,
-         layout: ShortcutCardLayout, action: @escaping () -> Void) {
+         layout: ShortcutCardLayout, keysHeight: CGFloat?, action: @escaping () -> Void) {
         self.init(keys: keys, title: title, detail: detail, selected: selected, layout: layout,
-                  action: action, accessory: { EmptyView() })
+                  keysHeight: keysHeight, action: action, accessory: { EmptyView() })
+    }
+}
+
+/// The natural height of a card's keys area, measured before the shared height is applied so
+/// a card that has grown to match the others never feeds its new height back.
+private struct ShortcutKeysHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
@@ -269,15 +291,18 @@ private struct NamedKeyRow: View {
     let keys: [NamedKey]
 
     var body: some View {
-        // Wide enough apart that each name reads as its own key's, not as one phrase.
-        FlowLayout(spacing: 14, lineSpacing: 12) {
-            ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
-                // Leading, like the card's text: the first cap lines up with the title.
-                VStack(alignment: .leading, spacing: 6) {
+        // Each key is a column as wide as its cap or its name, the name centred under the cap,
+        // so the names stay apart without spacing the caps out: ⌃ ⌥ D holds one line on a card
+        // a third of the default window. The first column stays leading, so its cap lines up
+        // with the title even under a long name like "Option droite".
+        FlowLayout(spacing: 8, lineSpacing: 12) {
+            ForEach(Array(keys.enumerated()), id: \.offset) { index, key in
+                VStack(alignment: index == 0 ? .leading : .center, spacing: 6) {
                     SKeyCap(key.cap, symbol: key.symbol, style: .hero)
                     Text(verbatim: key.name)
                         .scaledFont(size: 11, weight: .medium)
                         .foregroundColor(STheme.hint)
+                        .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
