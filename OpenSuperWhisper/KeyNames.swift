@@ -53,12 +53,13 @@ enum KeyNames {
 
     /// A modifier with no side, as a combination or a chord holds it.
     static func modifier(symbol: String, locale: Locale) -> NamedKey {
+        // Keys of their own: "Command" alone is already the Dictionary's entry kind.
         let name: LocalizedStringResource
         switch symbol {
-        case "⌃": name = "Control"
-        case "⌥": name = "Option"
-        case "⇧": name = "Shift"
-        case "⌘": name = "Command"
+        case "⌃": name = LocalizedStringResource("Control (key)", defaultValue: "Control")
+        case "⌥": name = LocalizedStringResource("Option (key)", defaultValue: "Option")
+        case "⇧": name = LocalizedStringResource("Shift (key)", defaultValue: "Shift")
+        case "⌘": name = LocalizedStringResource("Command (key)", defaultValue: "Command")
         default: return NamedKey(cap: symbol, name: symbol)
         }
         return NamedKey(cap: symbol, name: localized(name, locale))
@@ -75,16 +76,25 @@ enum KeyNames {
     /// layout draws for it.
     static func key(cap: String, locale: Locale) -> NamedKey {
         if cap == "⎋" { return NamedKey(cap: "Esc", name: localized("Escape", locale)) }
-        if cap.hasSuffix("\u{20E3}") {
-            let digit = String(cap.dropLast())
-            return NamedKey(cap: digit, name: localized("Keypad \(digit)", locale))
-        }
+        if let keypad = keypadKey(cap, locale: locale) { return keypad }
         if let name = specialName(cap) { return NamedKey(cap: cap, name: localized(name, locale)) }
         if cap.count > 1, cap.first == "F", Int(cap.dropFirst()) != nil {
             return NamedKey(cap: cap, name: localized("Function key", locale))
         }
         if let name = symbolName(cap) { return NamedKey(cap: cap, name: localized(name, locale)) }
         return NamedKey(cap: cap, name: localized("\(cap) key", locale))
+    }
+
+    /// KeyboardShortcuts draws a keypad key as its character in an enclosing keycap ("5⃣"),
+    /// one Character: the mark has to be found among the scalars, not with `hasSuffix`.
+    private static func keypadKey(_ cap: String, locale: Locale) -> NamedKey? {
+        guard cap.unicodeScalars.last == "\u{20E3}" else { return nil }
+        let base = String(String.UnicodeScalarView(cap.unicodeScalars.dropLast()))
+        switch base {
+        case "↩": return NamedKey(cap: "↩", name: localized("Keypad Enter", locale))
+        case "☒": return NamedKey(cap: "⌧", name: localized("Keypad Clear", locale))
+        default: return NamedKey(cap: base, name: localized("Keypad \(base)", locale))
+        }
     }
 
     /// Keys macOS draws as a glyph.
@@ -94,7 +104,7 @@ enum KeyNames {
         case "⌫": return "Delete"
         case "⌦": return "Forward Delete"
         case "⇥": return "Tab"
-        case "↖": return "Home key"
+        case "↖": return LocalizedStringResource("Home (key)", defaultValue: "Home")
         case "↘": return "End"
         case "⇞": return "Page Up"
         case "⇟": return "Page Down"

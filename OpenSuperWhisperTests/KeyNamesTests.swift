@@ -41,7 +41,7 @@ final class KeyNamesTests: XCTestCase {
     func testShiftAndCommandInACombination() {
         let trigger = RecordingTrigger.keyCombo(.init(.k, modifiers: [.shift, .command]))
         XCTAssertEqual(caps(trigger), ["⇧", "⌘", "K"])
-        XCTAssertEqual(names(trigger, french), ["Maj", "Commande", "Touche K"])
+        XCTAssertEqual(names(trigger, french), ["Majuscule", "Commande", "Touche K"])
     }
 
     func testTheDefaultCombinationNamesTheLayoutsKey() {
@@ -61,6 +61,40 @@ final class KeyNamesTests: XCTestCase {
         XCTAssertEqual(names(space, french).last, "Barre d'espace")
         let arrow = RecordingTrigger.keyCombo(.init(.leftArrow, modifiers: [.command]))
         XCTAssertEqual(names(arrow, english).last, "Left Arrow")
+    }
+
+    func testAKeypadKeyLosesItsEnclosingKeycap() {
+        let trigger = RecordingTrigger.keyCombo(.init(.keypad5, modifiers: [.option]))
+        XCTAssertEqual(caps(trigger), ["⌥", "5"])
+        XCTAssertEqual(names(trigger, french), ["Option", "5 du pavé numérique"])
+        XCTAssertEqual(KeyNames.key(cap: "↩\u{20E3}", locale: english), NamedKey(cap: "↩", name: "Keypad Enter"))
+        XCTAssertEqual(KeyNames.key(cap: "☒\u{20E3}", locale: french),
+                       NamedKey(cap: "⌧", name: "Effacement du pavé numérique"))
+        XCTAssertEqual(KeyNames.key(cap: "+\u{20E3}", locale: english).cap, "+")
+    }
+
+    func testHomeIsCalledHome() {
+        XCTAssertEqual(KeyNames.key(cap: "↖", locale: english).name, "Home")
+        XCTAssertEqual(KeyNames.key(cap: "↖", locale: french).name, "Début")
+    }
+
+    func testShiftHasOneFrenchNameWithOrWithoutItsSide() {
+        let combination = RecordingTrigger.keyCombo(.init(.k, modifiers: [.shift]))
+        XCTAssertEqual(names(combination, french).first, "Majuscule")
+        XCTAssertEqual(names(.modifier(.leftShift), french), ["Majuscule gauche"])
+    }
+
+    func testModifiersMatchTheSidedNamesInOtherShippedLanguages() {
+        let german = Locale(identifier: "de")
+        let combination = RecordingTrigger.keyCombo(.init(.d, modifiers: [.option]))
+        XCTAssertEqual(names(combination, german).first, "Wahltaste")
+        XCTAssertEqual(names(.modifier(.rightOption), german), ["Rechte Wahltaste"])
+    }
+
+    func testTheDefaultCombinationIsSpelledOnceForCapsAndNames() {
+        let iso = KeyboardLayoutInfo(labels: [50: "<"], physicalType: .iso)
+        XCTAssertEqual(OnboardingShortcutLabel.combinationCaps(nil, layout: iso, locale: french),
+                       OnboardingShortcutLabel.combinationKeys(nil, layout: iso, locale: french).map(\.cap))
     }
 
     func testAFunctionKeyAlone() {
