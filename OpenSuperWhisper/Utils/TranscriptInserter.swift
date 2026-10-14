@@ -2,6 +2,7 @@ import AppKit
 import CoreGraphics
 import Foundation
 import KeyboardShortcuts
+import OpenSuperWhisperCore
 
 /// The single place that decides *how* a finished transcription reaches the focused app:
 /// clipboard stash, paste-vs-type, and the no-editable-target fallback.
@@ -90,6 +91,34 @@ enum TranscriptInserter {
             TextInserter.type(text, paceMilliseconds: pace)
         }
         return false
+    }
+
+    /// The text exactly as it goes into the field: the post-processing every dictation gets,
+    /// then, with "Match the text around the cursor" on, fitted to what the field holds (#163).
+    ///
+    /// Read here, after the focus is back in the field and right before the insertion, because
+    /// the field is only worth reading once it is the one the text is going into. A field that
+    /// cannot be read gets the text exactly as it would have without the setting.
+    ///
+    /// - Parameters:
+    ///   - fitToField: the setting is on and the text is going to be inserted. Text that only
+    ///     goes to the clipboard has no caret to fit, and the field is then not read at all.
+    ///   - readField: the focused field, passed in so tests never read a real one.
+    @MainActor
+    static func prepared(_ text: String, fitToField: Bool,
+                         readField: () -> TextAroundCaret? = TextAroundCaret.focused) -> String {
+        let processed = IndicatorViewModel.applyPostProcessing(text)
+        guard fitToField else { return processed }
+        guard let field = Diag.measure("TextAroundCaret.focused", readField) else {
+            Diag.mark("caret match: field unreadable, text left as is")
+            return processed
+        }
+        let prefs = AppPreferences.shared
+        let terms = prefs.customDictionaryEnabled
+            ? CustomDictionary.boostTerms(entries: prefs.customDictionaryEntries) : []
+        let fitted = CaretTextMatcher.fit(processed, into: field, properNouns: Set(terms))
+        Diag.mark("caret match: \(fitted == processed ? "nothing to change" : "fitted to the field")")
+        return fitted
     }
 
     // MARK: - Paste that didn't land (#162)

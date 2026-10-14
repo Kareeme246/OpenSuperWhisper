@@ -69,7 +69,7 @@ enum PasteLastTranscript {
         // app that was frontmost when the clip was recorded. This insertion has no earlier moment
         // to refer back to: the request is being made now, at this window.
         let targetMissing = TranscriptInserter.insert(
-            IndicatorViewModel.applyPostProcessing(text),
+            TranscriptInserter.prepared(text, fitToField: AppPreferences.shared.matchTextAroundCaret),
             honorAutoPastePreference: false,
             targetBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
         if targetMissing {

@@ -464,8 +464,10 @@ final class DictationPipeline: ObservableObject {
     /// insertion policy itself lives in `TranscriptInserter`, shared with the re-paste shortcut.
     @discardableResult
     private func insertText(_ text: String, targetBundleID: String?) -> Bool {
-        TranscriptInserter.insert(IndicatorViewModel.applyPostProcessing(text),
-                                  honorAutoPastePreference: true,
-                                  targetBundleID: targetBundleID)
+        let prefs = AppPreferences.shared
+        let fitToField = prefs.autoPasteTranscription && prefs.matchTextAroundCaret
+        return TranscriptInserter.insert(TranscriptInserter.prepared(text, fitToField: fitToField),
+                                         honorAutoPastePreference: true,
+                                         targetBundleID: targetBundleID)
     }
 }

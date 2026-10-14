@@ -709,6 +709,15 @@ final class AppPreferences {
     @UserDefault(key: "pasteIntoOriginalField", defaultValue: true)
     var pasteIntoOriginalField: Bool
 
+    /// Read the field just before inserting and fit the dictation to it: lowercase in the middle
+    /// of a sentence, no final period before the rest of one, a space where words meet (#163).
+    ///
+    /// Off by default for the reason `useSurroundingTextAsContext` is: this reads the writing
+    /// itself, not a label about it, and that has to be asked for. What it reads stays in memory
+    /// for the one insertion.
+    @UserDefault(key: "matchTextAroundCaret", defaultValue: false)
+    var matchTextAroundCaret: Bool
+
     /// When on, a trailing "press enter" in the dictation is removed from the text and a Return
     /// key is pressed after the text is inserted — submitting the message/prompt (Claude Code,
     /// Slack, …). Opt-in: a stray Return can submit a form prematurely. See `stripSubmitCommand`.
