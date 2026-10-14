@@ -38,6 +38,8 @@ struct TextAndAIRubric: View {
         entry("Warn when no field is focused", keywords: "notify paste target prévenir champ actif notification"),
         entry("“press enter” sends", advanced: true, keywords: "submit return enter envoie entrée"),
         entry("Space between dictations", advanced: true, keywords: "space sentence espace entre deux dictées"),
+        entry("Match the text around the cursor", advanced: true,
+              keywords: "caret case capital lowercase period space sentence curseur majuscule minuscule point espace phrase"),
         entry("Suppress blank output", advanced: true,
               keywords: "blank audio no speech suppress blanc silence"),
         entry("Add timestamps", advanced: true, keywords: "timestamps time horodatage"),

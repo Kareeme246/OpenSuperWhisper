@@ -61,6 +61,11 @@ struct TextAIInsertionGroup: View {
                        advanced: true) {
                 SSwitch(isOn: $viewModel.addSpaceAfterSentence)
             }
+            SettingRow("Match the text around the cursor",
+                       hint: "Reads the field just before inserting: no capital or final period in the middle of a sentence, and a space where your words meet the ones already there. Fields that can’t be read get the text unchanged.",
+                       advanced: true) {
+                SSwitch(isOn: $viewModel.matchTextAroundCaret)
+            }
             whisperRows
             SettingRow("Per-app exceptions", hint: perAppHint, advanced: true) {
                 Button("Open →") {
