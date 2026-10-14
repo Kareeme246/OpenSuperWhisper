@@ -88,6 +88,10 @@ enum AgentHookCommand {
             expiresAt: now.addingTimeInterval(wait),
             hookPID: pid)
         request.source = agent
+        let host = AgentHostCapture.capture(environment: environment)
+        request.focusURL = host.focusURL?.absoluteString
+        request.hostBundleID = host.bundleID
+        request.hostPID = host.pid
         return request
     }
 

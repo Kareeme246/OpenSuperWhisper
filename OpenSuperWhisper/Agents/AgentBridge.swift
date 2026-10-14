@@ -142,6 +142,13 @@ struct AgentRequest: Codable, Identifiable, Equatable {
     /// The agent behind it, for its icon. Optional so a request written by an older hook
     /// still reads.
     var source: AgentKind? = nil
+    /// Where the session runs, for the panel's "Open in terminal": Warp's link to the pane,
+    /// and the app to bring forward when there is no link. Captured by the hook from its
+    /// environment and process tree (`AgentHostCapture`); optional, since older hooks wrote
+    /// none of them. The link is kept as text and checked again before it is opened.
+    var focusURL: String? = nil
+    var hostBundleID: String? = nil
+    var hostPID: Int32? = nil
 
     var agentKind: AgentKind { source ?? .claudeCode }
 
