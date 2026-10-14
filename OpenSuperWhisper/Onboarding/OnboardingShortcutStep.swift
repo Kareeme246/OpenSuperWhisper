@@ -16,11 +16,15 @@ struct OnboardingShortcutStep: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
+            // One choice for the three cards, so their titles stay on the same line or column.
             ViewThatFits(in: .horizontal) {
                 // Fixed vertically so the three cards share the tallest one's height.
-                HStack(alignment: .top, spacing: 14) { cards(idealWidth: Self.cardIdealWidth * textScale) }
-                    .fixedSize(horizontal: false, vertical: true)
-                VStack(alignment: .leading, spacing: 10) { cards(idealWidth: nil, stacked: true) }
+                HStack(alignment: .top, spacing: 14) {
+                    cards(idealWidth: Self.cardIdealWidth * textScale, layout: .keysAbove)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 10) { cards(idealWidth: nil, layout: .keysBeside) }
+                VStack(alignment: .leading, spacing: 10) { cards(idealWidth: nil, layout: .keysAbove) }
             }
 
             OnboardingCallout {
@@ -44,14 +48,13 @@ struct OnboardingShortcutStep: View {
         }
     }
 
-    /// Stacked, each card sets its keys beside its text, so the three stay short.
-    @ViewBuilder private func cards(idealWidth: CGFloat?, stacked: Bool = false) -> some View {
+    @ViewBuilder private func cards(idealWidth: CGFloat?, layout: ShortcutCardLayout) -> some View {
         ShortcutChoiceCard(
             keys: .keys(RecordingTrigger.modifier(.rightOption).namedKeys(locale: locale)),
             title: "The right Option key",
             detail: "Simple. Needs a macOS permission.",
             selected: viewModel.selectedShortcut == .rightOption,
-            stacked: stacked
+            layout: layout
         ) { viewModel.selectedShortcut = .rightOption }
         .frame(idealWidth: idealWidth)
         ShortcutChoiceCard(
@@ -60,21 +63,21 @@ struct OnboardingShortcutStep: View {
             title: "A key combination",
             detail: "No extra permission.",
             selected: viewModel.selectedShortcut == .keyCombination,
-            stacked: stacked
+            layout: layout
         ) { viewModel.selectedShortcut = .keyCombination }
         .frame(idealWidth: idealWidth)
-        customCard(stacked: stacked)
+        customCard(layout: layout)
             .frame(idealWidth: idealWidth)
     }
 
-    private func customCard(stacked: Bool) -> some View {
+    private func customCard(layout: ShortcutCardLayout) -> some View {
         let recorded = viewModel.customTrigger
         return ShortcutChoiceCard(
             keys: recorded.map { .keys($0.namedKeys(locale: locale)) } ?? .placeholder("Custom"),
             title: "Your own shortcut",
             detail: customDetail(recorded),
             selected: viewModel.selectedShortcut == .custom,
-            stacked: stacked
+            layout: layout
         ) {
             viewModel.selectedShortcut = .custom
         } accessory: {
@@ -109,12 +112,16 @@ struct OnboardingShortcutStep: View {
 
 /// How the shortcut choices are spelled on screen.
 enum OnboardingShortcutLabel {
-    /// The combination the second card offers, else the default one (⌥ and the key left of 1)
-    /// in the user's keyboard layout.
+    /// The combination the second card offers, else the default one in the user's keyboard layout.
     @MainActor static func combinationCaps(_ combination: RecordingTrigger?, layout: KeyboardLayoutInfo?,
                                            locale: Locale) -> [String] {
         if let combination { return caps(for: combination, locale: locale) }
-        return ["⌥", layout?.labels[50] ?? "`"]
+        return defaultCombinationCaps(layout: layout)
+    }
+
+    /// ⌥ and key code 50: left of 1 on an ANSI keyboard, beside left Shift on an ISO one.
+    static func defaultCombinationCaps(layout: KeyboardLayoutInfo?) -> [String] {
+        ["⌥", layout?.labels[50] ?? "`"]
     }
 
     /// One cap per key. A modifier on its own is one cap with its side spelled out, the way
@@ -128,9 +135,15 @@ enum OnboardingShortcutLabel {
     @MainActor static func combinationKeys(_ combination: RecordingTrigger?, layout: KeyboardLayoutInfo?,
                                            locale: Locale) -> [NamedKey] {
         if let combination { return combination.namedKeys(locale: locale) }
-        return [KeyNames.modifier(symbol: "⌥", locale: locale),
-                KeyNames.key(cap: layout?.labels[50] ?? "`", locale: locale)]
+        let caps = defaultCombinationCaps(layout: layout)
+        return [KeyNames.modifier(symbol: caps[0], locale: locale), KeyNames.key(cap: caps[1], locale: locale)]
     }
+}
+
+/// Where a card puts its keys. Stacked cards set them beside the text, so the three stay
+/// short, until the window or the text size leaves no room; then every card puts them above.
+enum ShortcutCardLayout {
+    case keysAbove, keysBeside
 }
 
 /// What a card shows above its title: the shortcut's keys, or a word while there is none yet.
@@ -144,10 +157,14 @@ private struct ShortcutChoiceCard<Accessory: View>: View {
     let title: LocalizedStringKey
     let detail: LocalizedStringKey
     let selected: Bool
-    var stacked = false
+    var layout = ShortcutCardLayout.keysAbove
     let action: () -> Void
     @ViewBuilder var accessory: () -> Accessory
     @Environment(\.textScaleFactor) private var textScale
+
+    /// Three hero caps and their names; a longer shortcut wraps inside it.
+    private static var keysColumnWidth: CGFloat { 172 }
+    private static var explanationIdealWidth: CGFloat { 180 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -155,19 +172,17 @@ private struct ShortcutChoiceCard<Accessory: View>: View {
             // own, which a Button around it would swallow.
             Button(action: action) {
                 Group {
-                    if stacked {
-                        // Keys beside the text while both fit on a line, else above it.
-                        ViewThatFits(in: .horizontal) {
-                            HStack(alignment: .top, spacing: 16) {
-                                keysLabel.fixedSize().frame(minWidth: 120 * textScale, alignment: .leading)
-                                explanation
-                            }
-                            VStack(alignment: .leading, spacing: 14) {
-                                keysLabel
-                                explanation
-                            }
+                    switch layout {
+                    case .keysBeside:
+                        HStack(alignment: .top, spacing: 16) {
+                            // The same column on every card, so the three titles start level.
+                            keysLabel.frame(width: Self.keysColumnWidth * textScale, alignment: .leading)
+                            // Judged on two lines, not on its one-line width, when the step
+                            // decides whether this layout fits.
+                            explanation.frame(idealWidth: Self.explanationIdealWidth * textScale,
+                                              maxWidth: .infinity, alignment: .leading)
                         }
-                    } else {
+                    case .keysAbove:
                         VStack(alignment: .leading, spacing: 14) {
                             keysLabel
                             explanation
@@ -241,8 +256,8 @@ private struct ShortcutChoiceCard<Accessory: View>: View {
 
 extension ShortcutChoiceCard where Accessory == EmptyView {
     init(keys: ShortcutCardKeys, title: LocalizedStringKey, detail: LocalizedStringKey, selected: Bool,
-         stacked: Bool, action: @escaping () -> Void) {
-        self.init(keys: keys, title: title, detail: detail, selected: selected, stacked: stacked,
+         layout: ShortcutCardLayout, action: @escaping () -> Void) {
+        self.init(keys: keys, title: title, detail: detail, selected: selected, layout: layout,
                   action: action, accessory: { EmptyView() })
     }
 }
@@ -254,7 +269,8 @@ private struct NamedKeyRow: View {
     let keys: [NamedKey]
 
     var body: some View {
-        FlowLayout(spacing: 7, lineSpacing: 12) {
+        // Wide enough apart that each name reads as its own key's, not as one phrase.
+        FlowLayout(spacing: 14, lineSpacing: 12) {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
                 // Leading, like the card's text: the first cap lines up with the title.
                 VStack(alignment: .leading, spacing: 6) {
