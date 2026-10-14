@@ -29,7 +29,8 @@ struct AgentComposer: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             bar
-            AgentShortcutHintsRow(hints: AgentShortcutHints.current(listening: listening))
+            AgentShortcutHintsRow(hints: AgentShortcutHints.current(
+                listening: listening, canOpenHost: AgentHostJump.target(for: request) != nil))
                 .padding(.leading, 6)
         }
         .onChange(of: listening) {
@@ -159,11 +160,20 @@ struct AgentComposer: View {
 }
 
 /// The keys that work here, spelled the way the user set them up, as raised caps. The recording
-/// trigger answers the agent once the panel has focus (a click in it is enough).
+/// trigger answers the agent once the panel has focus (a click in it is enough). When they do not
+/// all fit on the line, as with large text, the last ones are left out rather than cut.
 struct AgentShortcutHintsRow: View {
     let hints: [AgentShortcutHints]
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            ForEach((1...max(hints.count, 1)).reversed(), id: \.self) { count in
+                row(Array(hints.prefix(count)))
+            }
+        }
+    }
+
+    private func row(_ hints: [AgentShortcutHints]) -> some View {
         HStack(spacing: 16) {
             ForEach(hints, id: \.action) { hint in
                 HStack(spacing: 6) {

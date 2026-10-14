@@ -25,7 +25,13 @@ enum AgentHookCommand {
         case "question": request = makeQuestionRequest(from: json)
         default: request = nil
         }
-        guard let request, shouldAsk(request) else { exit(0) }
+        guard var request, shouldAsk(request) else { exit(0) }
+        // Only for a request that will be shown: the walk up the process tree asks
+        // LaunchServices about each ancestor, which a switched-off agent should not pay for.
+        let host = AgentHostCapture.capture(environment: ProcessInfo.processInfo.environment)
+        request.focusURL = host.focusURL?.absoluteString
+        request.hostBundleID = host.bundleID
+        request.hostPID = host.pid
         guard let requestURL = AgentBridge.requestURL(request.id),
               let responseURL = AgentBridge.responseURL(request.id),
               (try? AgentBridge.write(request, to: requestURL)) != nil else { exit(0) }

@@ -19065,6 +19065,57 @@
           }
         }
       }
+    },
+    "Open in %@ (⌘O)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir dans %@ (⌘O)"
+          }
+        }
+      }
+    },
+    "Open in terminal": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir dans le terminal"
+          }
+        }
+      }
+    },
+    "Open in terminal (⌘O)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir dans le terminal (⌘O)"
+          }
+        }
+      }
+    },
+    "Open in %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir dans %@"
+          }
+        }
+      }
+    },
+    "terminal": {
+      "comment": "Agent panel shortcut hint: what ⌘O does (brings back the terminal the agent runs in).",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "terminal"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
