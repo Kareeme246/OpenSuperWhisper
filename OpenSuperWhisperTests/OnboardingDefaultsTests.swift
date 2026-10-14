@@ -53,7 +53,7 @@ final class OnboardingDefaultsTests: XCTestCase {
     // MARK: The model step, staged
 
     func testTheStepPreselectsAppleSpeechAndLetsTheUserContinue() async {
-        let viewModel = OnboardingViewModel(system: .staged(appleSpeech: .systemDownload, appLanguage: "fr"))
+        let viewModel = OnboardingViewModel(system: .staged(appleSpeech: { _ in .systemDownload }, appLanguage: "fr"))
         await viewModel.refreshAppleSpeech()
         XCTAssertEqual(viewModel.unifiedModels.first?.isAppleSpeech, true, "Apple's row comes first")
         XCTAssertEqual(viewModel.selectedModelId, viewModel.appleSpeechRow?.id)
@@ -66,15 +66,16 @@ final class OnboardingDefaultsTests: XCTestCase {
         let system = OnboardingSystem.staged(downloaded: { type in
             if case .parakeet("ultra") = type { return true }
             return false
-        }, appleSpeech: .installed, appLanguage: "fr")
+        }, appleSpeech: { _ in .installed }, appLanguage: "fr")
         let viewModel = OnboardingViewModel(system: system)
         await viewModel.refreshAppleSpeech()
         XCTAssertEqual(viewModel.selectedModelId, viewModel.recommendedModel?.id)
+        XCTAssertEqual(AppPreferences.shared.selectedEngine, "fluidaudio")
         XCTAssertEqual(AppPreferences.shared.fluidAudioModelVersion, "ultra")
     }
 
     func testWithoutAppleSpeechTheStepIsUnchanged() async {
-        let viewModel = OnboardingViewModel(system: .staged(appleSpeech: .unavailable, appLanguage: "fr"))
+        let viewModel = OnboardingViewModel(system: .staged(appleSpeech: { _ in .unavailable }, appLanguage: "fr"))
         await viewModel.refreshAppleSpeech()
         XCTAssertNil(viewModel.appleSpeechRow)
         XCTAssertEqual(viewModel.selectedModelId, viewModel.recommendedModel?.id)
@@ -83,7 +84,7 @@ final class OnboardingDefaultsTests: XCTestCase {
 
     /// Picking a model by hand stops the default from following the language picker.
     func testAChoiceSurvivesALanguageChange() async {
-        let viewModel = OnboardingViewModel(system: .staged(appleSpeech: .installed, appLanguage: "fr"))
+        let viewModel = OnboardingViewModel(system: .staged(appleSpeech: { _ in .installed }, appLanguage: "fr"))
         await viewModel.refreshAppleSpeech()
         viewModel.selectRemote()
         viewModel.selectedLanguage = "de"
@@ -91,22 +92,70 @@ final class OnboardingDefaultsTests: XCTestCase {
         XCTAssertTrue(viewModel.remoteSelected)
     }
 
+    /// Apple's model speaks French here, not Korean.
+    private func frenchOnlyAppleSpeech() -> OnboardingViewModel {
+        OnboardingViewModel(system: .staged(appleSpeech: { $0 == "fr" ? .installed : .unavailable },
+                                            appLanguage: "fr"))
+    }
+
+    /// Its row goes with the language, and the default takes over again from what is left.
+    func testAppleSpeechLeavesWithALanguageItDoesNotSpeak() async {
+        let viewModel = frenchOnlyAppleSpeech()
+        await viewModel.refreshAppleSpeech()
+        XCTAssertEqual(viewModel.selectedModelId, viewModel.appleSpeechRow?.id)
+        viewModel.selectedLanguage = "ko"
+        await viewModel.refreshAppleSpeech()
+        assertAppleSpeechGone(from: viewModel)
+    }
+
+    /// Chosen by hand, Apple's model still cannot outlive its row: the choice is dropped and the
+    /// default picks again, rather than leaving Continue on a model the list no longer shows.
+    func testAHandPickedAppleSpeechIsDroppedWithItsLanguage() async {
+        let viewModel = frenchOnlyAppleSpeech()
+        await viewModel.refreshAppleSpeech()
+        guard let apple = viewModel.appleSpeechRow else { return XCTFail("Apple's row is missing") }
+        viewModel.selectModel(apple)
+        viewModel.selectedLanguage = "ko"
+        await viewModel.refreshAppleSpeech()
+        assertAppleSpeechGone(from: viewModel)
+    }
+
+    private func assertAppleSpeechGone(from viewModel: OnboardingViewModel,
+                                       file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertNil(viewModel.appleSpeechRow, file: file, line: line)
+        XCTAssertNotNil(viewModel.selectedModelId, file: file, line: line)
+        XCTAssertEqual(viewModel.selectedModelId, viewModel.recommendedModel?.id, file: file, line: line)
+        XCTAssertNotEqual(AppPreferences.shared.selectedEngine, "apple", file: file, line: line)
+    }
+
     // MARK: Spoken language
 
     private let available = ["auto", "de", "en", "fr", "ja", "pt"]
 
-    func testTheAppsLanguageComesFirst() {
-        XCTAssertEqual(OnboardingLanguageDefault.pick(appLanguage: "fr", preferredLanguages: ["en-US"],
+    /// A per-app language choice reaches the process as its first preferred language.
+    func testTheAppsChosenLanguageComesFirst() {
+        XCTAssertEqual(OnboardingLanguageDefault.pick(appLanguage: "fr", preferredLanguages: ["fr", "en-US"],
                                                       available: available), "fr")
     }
 
-    func testTheSystemsLanguageWhenTheAppsIsNotTranscribed() {
-        XCTAssertEqual(OnboardingLanguageDefault.pick(appLanguage: "tlh", preferredLanguages: ["de-CH", "fr"],
-                                                      available: available), "de")
+    /// The app has no Japanese, so it runs in English: that is not the language the user speaks.
+    func testTheSystemsLanguageWinsOverTheAppsFallback() {
+        XCTAssertEqual(OnboardingLanguageDefault.pick(appLanguage: "en", preferredLanguages: ["ja-JP"],
+                                                      available: available), "ja")
+    }
+
+    func testTheAppsLanguageWhenTheSystemsIsNotTranscribed() {
+        XCTAssertEqual(OnboardingLanguageDefault.pick(appLanguage: "fr", preferredLanguages: ["tlh", "fr-CA"],
+                                                      available: available), "fr")
+    }
+
+    func testAnAppLanguageTheUserNeverAskedForIsIgnored() {
+        XCTAssertEqual(OnboardingLanguageDefault.pick(appLanguage: "de", preferredLanguages: ["tlh"],
+                                                      available: available), "en")
     }
 
     func testRegionalAndScriptVariantsMapToTheirLanguage() {
-        XCTAssertEqual(OnboardingLanguageDefault.pick(appLanguage: "pt-BR", preferredLanguages: [],
+        XCTAssertEqual(OnboardingLanguageDefault.pick(appLanguage: "pt-BR", preferredLanguages: ["pt-BR"],
                                                       available: available), "pt")
     }
 
@@ -154,6 +203,29 @@ final class OnboardingDefaultsTests: XCTestCase {
     func testAKeyAlreadyHeldStaysInTheHoldList() {
         XCTAssertEqual(plan(.custom, custom: .modifier(.rightCommand), from: [combo],
                             hold: [.modifier(.rightCommand)]), [combo])
+    }
+
+    /// Same rule as the editor in Settings: the router checks submit first, so a key left bound
+    /// to it would never start a dictation.
+    func testARecordedKeyStopsBeingTheSubmitKey() {
+        let prefs = AppPreferences.shared
+        let previousSubmit = prefs.submitModifierOnlyHotkey
+        defer { prefs.submitModifierOnlyHotkey = previousSubmit }
+        prefs.submitModifierOnlyHotkey = ModifierKey.rightCommand.rawValue
+        let viewModel = OnboardingViewModel(system: .staged())
+        viewModel.customTrigger = .modifier(.rightCommand)
+        XCTAssertEqual(viewModel.selectedShortcut, .custom)
+        XCTAssertEqual(prefs.submitModifierOnlyHotkey, ModifierKey.none.rawValue)
+    }
+
+    func testASubmitKeyOnAnotherKeyIsKept() {
+        let prefs = AppPreferences.shared
+        let previousSubmit = prefs.submitModifierOnlyHotkey
+        defer { prefs.submitModifierOnlyHotkey = previousSubmit }
+        prefs.submitModifierOnlyHotkey = ModifierKey.rightCommand.rawValue
+        let viewModel = OnboardingViewModel(system: .staged())
+        viewModel.selectedShortcut = .rightOption
+        XCTAssertEqual(prefs.submitModifierOnlyHotkey, ModifierKey.rightCommand.rawValue)
     }
 
     func testOnlyLoneModifiersAndChordsNeedInputMonitoring() {

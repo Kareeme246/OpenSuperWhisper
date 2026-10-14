@@ -18,7 +18,9 @@ extension OnboardingViewModel {
     }
 
     /// Writes the choice to the trigger list the app listens to, plus the old single-slot key
-    /// that older builds and the one-time repair read.
+    /// that older builds and the one-time repair read. Like the editor in Settings, a key that
+    /// was the stop-and-submit binding stops being one: the router checks submit first, so the
+    /// chosen shortcut would otherwise never start a dictation.
     func applyShortcut() {
         let prefs = AppPreferences.shared
         prefs.modifierOnlyHotkey = (selectedShortcut == .rightOption ? ModifierKey.rightOption : .none).rawValue
@@ -29,6 +31,7 @@ extension OnboardingViewModel {
             hold: RecordingTriggerSet.load(from: prefs.holdRecordingTriggers),
             combination: combination, previousCustom: appliedCustom).json
         appliedCustom = custom
+        if let effectiveTrigger { prefs.releaseSubmitBinding(claimedBy: effectiveTrigger) }
         NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
     }
 }

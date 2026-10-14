@@ -47,7 +47,7 @@ extension UISnapshotProbe {
                 if case .parakeet("ultra") = type { return downloadedUltra }
                 return false
             },
-            appleSpeech: appleSpeech,
+            appleSpeech: { _ in appleSpeech },
             appLanguage: language)
         let viewModel = OnboardingViewModel(system: system)
         viewModel.selectedShortcut = choice

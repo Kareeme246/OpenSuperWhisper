@@ -34,17 +34,27 @@ enum OnboardingModelDefault {
 
 /// The spoken language the model step starts on.
 enum OnboardingLanguageDefault {
-    /// The language the app is shown in, then the system's first preferred language, the first
-    /// of them the engines can transcribe. English otherwise, as before. It used to read only
-    /// the system's languages, so a Mac in English running the app in French started on English.
+    /// The user's first preferred language, then the language the app is shown in, the first
+    /// of them the engines can transcribe. English otherwise, as before.
+    ///
+    /// The app's language counts only when the user asked for it. On a Mac in Japanese the app,
+    /// which has no Japanese translation, falls back to English: taking that as the user's
+    /// language would dictate Japanese as English. A per-app language choice needs no special
+    /// case, since macOS already puts it first in `preferredLanguages` inside the process.
     static func pick(appLanguage: String?, preferredLanguages: [String], available: [String]) -> String {
-        let candidates = [appLanguage].compactMap { $0 } + preferredLanguages.prefix(1)
+        let requested = Set(preferredLanguages.map(code))
+        let appCandidate = appLanguage.flatMap { requested.contains(code($0)) ? $0 : nil }
+        let candidates = Array(preferredLanguages.prefix(1)) + [appCandidate].compactMap { $0 }
         for identifier in candidates {
-            let code = Locale.Language(identifier: identifier).languageCode?.identifier
-                ?? String(identifier.prefix(2)).lowercased()
-            if code != "auto", available.contains(code) { return code }
+            let languageCode = code(identifier)
+            if languageCode != "auto", available.contains(languageCode) { return languageCode }
         }
         return "en"
+    }
+
+    private static func code(_ identifier: String) -> String {
+        Locale.Language(identifier: identifier).languageCode?.identifier
+            ?? String(identifier.prefix(2)).lowercased()
     }
 }
 

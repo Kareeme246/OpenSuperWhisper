@@ -19,12 +19,13 @@ struct OnboardingSystem {
         appLanguage: Bundle.main.preferredLocalizations.first,
         preferredLanguages: Locale.preferredLanguages)
 
-    /// Fixed answers, nothing read from disk or from the system.
+    /// Fixed answers, nothing read from disk or from the system. Apple's offer is asked per
+    /// language, so a test can switch to one it does not speak.
     static func staged(downloaded: @escaping (OnboardingModelType) -> Bool = { _ in false },
-                       appleSpeech: AppleSpeechOffer = .unavailable,
+                       appleSpeech: @escaping (_ language: String) -> AppleSpeechOffer = { _ in .unavailable },
                        appLanguage: String? = "en") -> OnboardingSystem {
         OnboardingSystem(isDownloaded: downloaded,
-                         appleSpeech: { _ in appleSpeech },
+                         appleSpeech: { appleSpeech($0) },
                          appLanguage: appLanguage,
                          preferredLanguages: [appLanguage ?? "en"])
     }

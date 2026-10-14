@@ -37,6 +37,29 @@ final class AppPreferences {
         if clash.mouse { submitMouseButtonHotkey = MouseButton.none.rawValue }
     }
 
+    /// Clears the stop-and-submit binding when `trigger` is that same key, button or chord: a key
+    /// joining the trigger lists takes it from submit, the newest assignment winning, for the
+    /// same reason as above. The trigger editor in Settings and onboarding's shortcut step both
+    /// call it.
+    func releaseSubmitBinding(claimedBy trigger: RecordingTrigger) {
+        switch trigger {
+        case .modifier(let key):
+            if submitModifierOnlyHotkey == key.rawValue {
+                submitModifierOnlyHotkey = ModifierKey.none.rawValue
+            }
+        case .mouse(let button):
+            if submitMouseButtonHotkey == button.rawValue {
+                submitMouseButtonHotkey = MouseButton.none.rawValue
+            }
+        case .chord(let chord):
+            if submitModifierChord == chord.storageValue {
+                submitModifierChord = ""
+            }
+        case .keyCombo, .none:
+            break
+        }
+    }
+
     /// Carries the three single-slot trigger preferences into the list. Idempotent: only runs
     /// while the new key is unset. The old keys stay readable so a downgrade still finds them.
     private func migrateRecordingTriggers() {

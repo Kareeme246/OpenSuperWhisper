@@ -534,22 +534,7 @@ struct TriggerRecorderField: View {
         } else {
             prefs.holdRecordingTriggers = RecordingTriggerSet.removing(trigger, from: prefs.holdRecordingTriggers)
         }
-        switch trigger {
-        case .modifier(let key):
-            if prefs.submitModifierOnlyHotkey == key.rawValue {
-                prefs.submitModifierOnlyHotkey = ModifierKey.none.rawValue
-            }
-        case .mouse(let button):
-            if prefs.submitMouseButtonHotkey == button.rawValue {
-                prefs.submitMouseButtonHotkey = MouseButton.none.rawValue
-            }
-        case .chord(let chord):
-            if prefs.submitModifierChord == chord.storageValue {
-                prefs.submitModifierChord = ""
-            }
-        case .keyCombo, .none:
-            break
-        }
+        prefs.releaseSubmitBinding(claimedBy: trigger)
     }
 
     /// Same rule, applied when a single-binding field claims something the trigger list holds.
