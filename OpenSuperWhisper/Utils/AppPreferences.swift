@@ -723,6 +723,14 @@ final class AppPreferences {
     @UserDefault(key: "matchTextAroundCaret", defaultValue: false)
     var matchTextAroundCaret: Bool
 
+    /// Paste a dictated list as real bullets into the apps known to take rich text (#166).
+    ///
+    /// On by default: it changes nothing unless the text already has "- " or "1. " lines, only
+    /// in apps on `RichListPaste.richTextApps`, and the plain lines stay on the pasteboard for
+    /// any field there that reads text only.
+    @UserDefault(key: "pasteListsAsRichText", defaultValue: true)
+    var pasteListsAsRichText: Bool
+
     /// When on, a trailing "press enter" in the dictation is removed from the text and a Return
     /// key is pressed after the text is inserted — submitting the message/prompt (Claude Code,
     /// Slack, …). Opt-in: a stray Return can submit a form prematurely. See `stripSubmitCommand`.
