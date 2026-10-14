@@ -92,8 +92,9 @@ enum CaretGeometryFixtures {
 
     /// Terminal.app, shaped after the owner's check on #155: an empty caret at a position with no
     /// relation to the prompt, and the character before it placed on the prompt line. The text
-    /// area is the whole window and the caret offset counts the scrollback. Coordinates are
-    /// illustrative; only their shape matters to the decision.
+    /// area is the whole window and the caret offset counts the scrollback. Provisional until
+    /// replaced with a recording: coordinates and offsets are illustrative, only their shape
+    /// matters to the decision.
     static func terminal() -> RecordedTextElement {
         RecordedTextElement("Terminal.app",
                             selection: CFRange(location: 5231, length: 0),

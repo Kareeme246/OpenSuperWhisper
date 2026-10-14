@@ -39,37 +39,67 @@ enum CaretAnchor {
     ///    on the prompt line (#155). Since #144 that terminal fell straight through to its text
     ///    area, which is the whole window, and the bubble sat at the window's corner.
     /// 3. The field itself, which Chrome reports correctly where its caret and characters are
-    ///    both empty (#144).
+    ///    both empty (#144), but only for an element that answered the caret query. One that
+    ///    refuses it outright follows the mouse, as every such element did before #144. Ghostty
+    ///    is one: it places no range at all and its field is a whole terminal surface, so the
+    ///    field put the bubble at the surface's top-left corner (#155). Its prompt can be
+    ///    anywhere on that surface, at the top after a `clear`, so no edge of it is a better guess
+    ///    than the pointer.
     ///
     /// An app with a believable caret is asked one question. nil when nothing usable comes back,
     /// leaving the caller to fall back to the mouse.
     static func choose(selection: CFRange, in element: TextElementGeometry) -> Choice? {
-        if let caret = element.bounds(of: selection), caret.height > 0 {
+        let caret = element.bounds(of: selection)
+        if let caret, caret.height > 0 {
             return Choice(rect: caret, source: .caret)
         }
+        let character = characterBefore(selection, in: element)
+        // Refused, with nothing before it to place: the mouse (see 3), without asking the frame.
+        guard caret != nil || character != nil else { return nil }
+
         let field = element.frame.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
-        if let edge = trailingEdgeOfCharacter(before: selection, in: element, field: field) {
+        if let character, let edge = trailingEdge(of: character, field: field) {
             return Choice(rect: edge, source: .characterBefore)
         }
+        guard caret != nil else { return nil }
         return field.map { Choice(rect: $0, source: .field) }
     }
 
-    /// A zero-width caret where the character before the selection ends, or nil when there is no
-    /// such character or its bounds are no more believable than the caret's.
+    /// The bounds of the character just before the selection, when they have height.
     ///
     /// Only the character before: at the start of the text there is nothing to measure, and the
     /// character after is no substitute, because Ghostty reports its caret at offset 0 whenever
-    /// nothing is selected, and the first character of its scrollback is nowhere near the prompt. A "character" covering the
-    /// whole field is the field: Chrome answers the sibling text-marker query with the entire
+    /// nothing is selected, and the first character of its scrollback is nowhere near the prompt.
+    ///
+    /// With the caret at the start of a line, the character before is the newline that ends the
+    /// line above, and the bubble goes to the end of that line: one line off, in the right
+    /// field. Telling a newline apart would take reading the text or guessing from where its
+    /// rect ends, and no app has been recorded answering for one yet.
+    private static func characterBefore(_ selection: CFRange,
+                                        in element: TextElementGeometry) -> CGRect? {
+        guard selection.location > 0 else { return nil }
+        let before = CFRange(location: selection.location - 1, length: 1)
+        guard let character = element.bounds(of: before), character.height > 0 else { return nil }
+        return character
+    }
+
+    /// A zero-width caret where `character` ends, or nil when that is no more believable than the
+    /// caret was.
+    ///
+    /// A character with height can still be in the wrong place, as Chrome's caret was (#143): in
+    /// another coordinate space, or scrolled out of view, like a Terminal selection that starts in
+    /// the scrollback. Its end must lie in the field, give or take a line, which also allows for
+    /// text reported just outside its view's frame as TextEdit's caret is. A "character" covering
+    /// the whole field is the field: Chrome answers the sibling text-marker query with the entire
     /// editor (#143), and its trailing edge would put the bubble past the field's far side.
-    private static func trailingEdgeOfCharacter(before selection: CFRange,
-                                                in element: TextElementGeometry,
-                                                field: CGRect?) -> CGRect? {
-        guard selection.location > 0,
-              let character = element.bounds(of: CFRange(location: selection.location - 1, length: 1)),
-              character.height > 0 else { return nil }
-        if let field, character.contains(field) { return nil }
-        return CGRect(x: character.maxX, y: character.minY, width: 0, height: character.height)
+    private static func trailingEdge(of character: CGRect, field: CGRect?) -> CGRect? {
+        let edge = CGRect(x: character.maxX, y: character.minY, width: 0, height: character.height)
+        guard let field else { return edge }
+        let slack = character.height
+        guard !character.contains(field),
+              field.insetBy(dx: -slack, dy: -slack).contains(CGPoint(x: edge.minX, y: edge.midY))
+        else { return nil }
+        return edge
     }
 }
 
