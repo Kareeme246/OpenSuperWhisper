@@ -211,6 +211,12 @@ class ShortcutManager {
     }
     
     private func setupRecordingTrigger() {
+        // Tears down and re-installs event taps on the main thread: logged, so a slow re-arm
+        // shows up in the diagnostics rather than as a vague stutter.
+        Diag.measure("setupRecordingTrigger") { armRecordingTriggers() }
+    }
+
+    private func armRecordingTriggers() {
         let set = RecordingTriggerSet.load(from: AppPreferences.shared.recordingTriggers)
         let holdSet = RecordingTriggerSet.load(from: AppPreferences.shared.holdRecordingTriggers)
         // Optional second bindings that dictate and then submit. Separate from the trigger list:

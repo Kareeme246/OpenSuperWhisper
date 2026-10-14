@@ -18240,6 +18240,831 @@
           }
         }
       }
+    },
+    "Already on this Mac for your language. Nothing to download.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déjà sur ce Mac pour votre langue. Rien à télécharger."
+          }
+        }
+      }
+    },
+    "Built into macOS, or one download away. Either way, dictation runs on this Mac.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intégré à macOS, ou à un téléchargement près. Dans les deux cas, la dictée tourne sur ce Mac."
+          }
+        }
+      }
+    },
+    "Any key, combination or mouse button.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une touche, une combinaison ou un bouton de souris."
+          }
+        }
+      }
+    },
+    "Best accuracy, 1.6 GB": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meilleure précision, 1,6 Go"
+          }
+        }
+      }
+    },
+    "Apple's own model: fast, private, no account needed.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le modèle d'Apple : rapide, privé, sans compte."
+          }
+        }
+      }
+    },
+    "Click the field on the card, then press the key or combination you want. A spare mouse button works too.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur le champ de la carte, puis appuyez sur la touche ou la combinaison voulue. Un bouton de souris libre marche aussi."
+          }
+        }
+      }
+    },
+    "Compact and quick. Chinese, English, Japanese, Korean, Cantonese": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compact et rapide. Chinois, anglais, japonais, coréen, cantonais"
+          }
+        }
+      }
+    },
+    "Fastest processing and most accurate, 614 MB": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le plus rapide et le plus précis, 614 Mo"
+          }
+        }
+      }
+    },
+    "More accurate than Apple's model. One download, then it runs on this Mac, no account needed.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus précis que le modèle d'Apple. Un téléchargement, puis il tourne sur ce Mac, sans compte."
+          }
+        }
+      }
+    },
+    "More accurate than Apple's model. Runs on this Mac, no account needed.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus précis que le modèle d'Apple. Tourne sur ce Mac, sans compte."
+          }
+        }
+      }
+    },
+    "Most compressed, 574 MB": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le plus compressé, 574 Mo"
+          }
+        }
+      }
+    },
+    "Nearly the same accuracy, 874 MB": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presque la même précision, 874 Mo"
+          }
+        }
+      }
+    },
+    "Needs a macOS permission.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nécessite une autorisation macOS."
+          }
+        }
+      }
+    },
+    "Record again": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer à nouveau"
+          }
+        }
+      }
+    },
+    "This shortcut needs no extra permission.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce raccourci ne demande aucune autorisation supplémentaire."
+          }
+        }
+      }
+    },
+    "To notice %@ while another app is in front. macOS asks once, when the app starts listening for the key. Only modifier keys are watched.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pour remarquer %@ quand une autre app est au premier plan. macOS le demande une fois, quand l'app commence à écouter la touche. Seules les touches de modification sont surveillées."
+          }
+        }
+      }
+    },
+    "Your own shortcut": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre propre raccourci"
+          }
+        }
+      }
+    },
+    "key combination…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "combinaison de touches…"
+          }
+        }
+      }
+    },
+    "key or modifier…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "touche ou modificateur…"
+          }
+        }
+      }
+    },
+    "key, modifier or mouse…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "touche, modificateur ou souris…"
+          }
+        }
+      }
+    },
+    "macOS downloads your language the first time you dictate. Nothing to download in the app.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS télécharge votre langue à votre première dictée. Rien à télécharger dans l'app."
+          }
+        }
+      }
+    },
+    "Auto-detect": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Détection automatique"
+          }
+        }
+      }
+    },
+    "%@ key": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touche %@"
+          }
+        }
+      }
+    },
+    "Apostrophe": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apostrophe"
+          }
+        }
+      }
+    },
+    "At sign": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arobase"
+          }
+        }
+      }
+    },
+    "Backslash": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Barre oblique inverse"
+          }
+        }
+      }
+    },
+    "Circumflex": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accent circonflexe"
+          }
+        }
+      }
+    },
+    "Comma": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Virgule"
+          }
+        }
+      }
+    },
+    "Down Arrow": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flèche bas"
+          }
+        }
+      }
+    },
+    "End": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fin"
+          }
+        }
+      }
+    },
+    "Equals": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Égal"
+          }
+        }
+      }
+    },
+    "Escape": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échap"
+          }
+        }
+      }
+    },
+    "Forward Delete": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer à droite"
+          }
+        }
+      }
+    },
+    "Function": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fonction"
+          }
+        }
+      }
+    },
+    "Function key": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touche de fonction"
+          }
+        }
+      }
+    },
+    "Grave accent": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accent grave"
+          }
+        }
+      }
+    },
+    "Greater-than": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supérieur à"
+          }
+        }
+      }
+    },
+    "Keypad %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ du pavé numérique"
+          }
+        }
+      }
+    },
+    "Left Arrow": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flèche gauche"
+          }
+        }
+      }
+    },
+    "Left bracket": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crochet ouvrant"
+          }
+        }
+      }
+    },
+    "Less-than": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inférieur à"
+          }
+        }
+      }
+    },
+    "Minus": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moins"
+          }
+        }
+      }
+    },
+    "Page Down": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Page suivante"
+          }
+        }
+      }
+    },
+    "Page Up": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Page précédente"
+          }
+        }
+      }
+    },
+    "Period": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Point"
+          }
+        }
+      }
+    },
+    "Return": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retour"
+          }
+        }
+      }
+    },
+    "Right Arrow": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flèche droite"
+          }
+        }
+      }
+    },
+    "Right bracket": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crochet fermant"
+          }
+        }
+      }
+    },
+    "Section sign": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paragraphe"
+          }
+        }
+      }
+    },
+    "Semicolon": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Point-virgule"
+          }
+        }
+      }
+    },
+    "Slash": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Barre oblique"
+          }
+        }
+      }
+    },
+    "Space bar": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Barre d'espace"
+          }
+        }
+      }
+    },
+    "Superscript two": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exposant deux"
+          }
+        }
+      }
+    },
+    "Tab": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tabulation"
+          }
+        }
+      }
+    },
+    "Up Arrow": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flèche haut"
+          }
+        }
+      }
+    },
+    "Button 3 (Middle)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bouton 3 (milieu)"
+          }
+        }
+      }
+    },
+    "Button 4 (Back)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bouton 4 (précédent)"
+          }
+        }
+      }
+    },
+    "Button 5 (Forward)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bouton 5 (suivant)"
+          }
+        }
+      }
+    },
+    "Button 6": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bouton 6"
+          }
+        }
+      }
+    },
+    "Button 7": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bouton 7"
+          }
+        }
+      }
+    },
+    "Control (key)": {
+      "comment": "Name written under the ⌃ key cap in onboarding",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrôle"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ctrl-Taste"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control"
+          }
+        }
+      }
+    },
+    "Option (key)": {
+      "comment": "Name written under the ⌥ key cap in onboarding",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Option"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Option"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wahltaste"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opción"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Option"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Option"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Option"
+          }
+        }
+      }
+    },
+    "Shift (key)": {
+      "comment": "Name written under the ⇧ key cap in onboarding",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shift"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Majuscule"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Umschalttaste"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mayúsculas"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maiusc"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shift"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shift"
+          }
+        }
+      }
+    },
+    "Command (key)": {
+      "comment": "Name written under the ⌘ key cap in onboarding",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commande"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Befehlstaste"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comando"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command"
+          }
+        }
+      }
+    },
+    "Home (key)": {
+      "comment": "Name written under the ↖ (Home) key cap in onboarding",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Home"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Début"
+          }
+        }
+      }
+    },
+    "Keypad Enter": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrée du pavé numérique"
+          }
+        }
+      }
+    },
+    "Keypad Clear": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacement du pavé numérique"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

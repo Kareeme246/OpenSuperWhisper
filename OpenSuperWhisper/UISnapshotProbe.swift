@@ -195,7 +195,7 @@ enum UISnapshotProbe {
         }
         seedRecordings()
 
-        var all = screens
+        var all = screens.merging(onboardingScreens) { current, _ in current }
         for rubric in SettingsRubric.allCases {
             all["settings-\(rubric.rawValue)"] = {
                 AdvancedRubrics.shared.set(rubric.rawValue, false)

@@ -3,8 +3,11 @@ import OpenSuperWhisperCore
 
 /// Step 2: the spoken language, then the model the app suggests for it, explained, with the
 /// other models and a remote server below. Continue waits for a model on disk (or a server).
+/// Where macOS has its own speech model for the language, it comes first and is preselected:
+/// nothing to download. Parakeet stays recommended right under it, for its accuracy.
 struct OnboardingModelStep: View {
     @ObservedObject var viewModel: OnboardingViewModel
+    @Environment(\.locale) private var locale
 
     var body: some View {
         VStack(alignment: .leading, spacing: 28) {
@@ -19,14 +22,21 @@ struct OnboardingModelStep: View {
                 }
             }
 
+            if let apple = binding(for: viewModel.appleSpeechRow) {
+                OnboardingModelRow(model: apple, viewModel: viewModel,
+                                   explanation: "Apple's own model: fast, private, no account needed.",
+                                   tag: ("Built into macOS", .engine))
+            }
+
             if let recommended = binding(for: viewModel.recommendedModel) {
                 OnboardingModelRow(model: recommended, viewModel: viewModel,
-                                   explanation: explanation(for: recommended.wrappedValue))
+                                   explanation: explanation(for: recommended.wrappedValue),
+                                   tag: ("Recommended", .new))
             }
 
             section("Other options") {
                 ForEach($viewModel.unifiedModels) { $model in
-                    if model.id != viewModel.recommendedModel?.id {
+                    if model.id != viewModel.recommendedModel?.id && !model.isAppleSpeech {
                         OnboardingModelRow(model: $model, viewModel: viewModel)
                     }
                 }
@@ -36,10 +46,11 @@ struct OnboardingModelStep: View {
     }
 
     private var languageMenu: some View {
-        SMenu(Text(LanguageUtil.languageNames[viewModel.selectedLanguage] ?? viewModel.selectedLanguage)) {
+        SMenu(SpokenLanguageName.text(for: viewModel.selectedLanguage, locale: locale)) {
             Picker("", selection: $viewModel.selectedLanguage) {
-                ForEach(LanguageUtil.availableLanguages, id: \.self) { code in
-                    Text(LanguageUtil.languageNames[code] ?? code).tag(code)
+                ForEach(SpokenLanguageName.sorted(LanguageUtil.availableLanguages, locale: locale),
+                        id: \.self) { code in
+                    SpokenLanguageName.text(for: code, locale: locale).tag(code)
                 }
             }
             .pickerStyle(.inline)
@@ -63,11 +74,18 @@ struct OnboardingModelStep: View {
         return $viewModel.unifiedModels[index]
     }
 
+    /// Next to Apple's model, which needs nothing from the app, the case for this one is
+    /// accuracy. A reinstall has it on disk already, so it promises no download.
     private func explanation(for model: OnboardingUnifiedModel) -> LocalizedStringKey {
+        if viewModel.appleSpeechRow != nil {
+            return model.isDownloaded
+                ? "More accurate than Apple's model. Runs on this Mac, no account needed."
+                : "More accurate than Apple's model. One download, then it runs on this Mac, no account needed."
+        }
         switch model.type {
         case .parakeet:
             return "Fast and accurate in your language. Runs on this Mac, no account needed."
-        case .whisper, .senseVoice:
+        case .whisper, .senseVoice, .appleSpeech:
             return "Understands your language well. Runs on this Mac, no account needed."
         }
     }
@@ -105,16 +123,20 @@ struct OnboardingModelStep: View {
     }
 }
 
-/// One model: what it is, its download and its state. `explanation` marks the recommended one,
-/// drawn larger with the reason it is suggested.
+/// One model: what it is, its download and its state. `explanation` marks a highlighted one
+/// (the recommended model, Apple's), drawn larger with the reason it is offered and `tag` above
+/// its name.
 struct OnboardingModelRow: View {
     @Binding var model: OnboardingUnifiedModel
     @ObservedObject var viewModel: OnboardingViewModel
     var explanation: LocalizedStringKey? = nil
+    var tag: (label: LocalizedStringKey, kind: SBadgeKind)? = nil
     @State private var showError = false
     @State private var errorMessage = ""
 
     private var isSelected: Bool { viewModel.selectedModelId == model.id }
+    /// Usable as it is: on disk, or Apple's, which macOS provides.
+    private var isReady: Bool { model.isDownloaded || model.isAppleSpeech }
     private var isDownloadingThis: Bool {
         viewModel.isDownloading && viewModel.downloadingModelName == model.name
     }
@@ -123,18 +145,19 @@ struct OnboardingModelRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                if prominent {
-                    SBadge("Recommended", kind: .new).padding(.bottom, 4)
+                if let tag {
+                    SBadge(tag.label, kind: tag.kind).padding(.bottom, 4)
                 }
                 HStack(spacing: 8) {
                     Text(model.name)
                         .scaledFont(size: prominent ? 20 : 15, weight: prominent ? .bold : .semibold)
                         .foregroundColor(STheme.textBright)
+                    // Apple's gets no badge: the line under its name says where its language is.
                     if model.isDownloaded {
                         SBadge("Downloaded", kind: .engine)
                     }
                 }
-                Text(model.description)
+                Text(description)
                     .scaledFont(size: 13)
                     .foregroundColor(STheme.hint)
                     .fixedSize(horizontal: false, vertical: true)
@@ -154,7 +177,7 @@ struct OnboardingModelRow: View {
         .onboardingChoice(selected: isSelected, padding: prominent ? 20 : 16)
         .contentShape(Rectangle())
         .onTapGesture {
-            if model.isDownloaded && !isSelected { viewModel.selectModel(model) }
+            if isReady && !isSelected { viewModel.selectModel(model) }
         }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .alert("Download Error", isPresented: $showError) {
@@ -162,6 +185,16 @@ struct OnboardingModelRow: View {
         } message: {
             Text(errorMessage)
         }
+    }
+
+    /// Apple's says where its language stands: on this Mac already, or fetched by macOS on
+    /// first use. Saying it is there before it is would make the first dictation's wait a
+    /// surprise.
+    private var description: LocalizedStringKey {
+        guard model.isAppleSpeech else { return model.description }
+        return viewModel.appleSpeech == .installed
+            ? "Already on this Mac for your language. Nothing to download."
+            : "macOS downloads your language the first time you dictate. Nothing to download in the app."
     }
 
     /// A bar once the download reports how far it is, a spinner before that (Parakeet's first
@@ -184,7 +217,7 @@ struct OnboardingModelRow: View {
         if isDownloadingThis {
             Button("Cancel") { viewModel.cancelDownload() }
                 .buttonStyle(.sSecondary)
-        } else if model.isDownloaded {
+        } else if isReady {
             if isSelected {
                 Label("Selected", systemImage: "checkmark")
                     .scaledFont(size: 13, weight: .semibold)
