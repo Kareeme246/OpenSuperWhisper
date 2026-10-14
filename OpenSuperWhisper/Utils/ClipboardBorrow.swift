@@ -60,12 +60,12 @@ extension ClipboardUtil {
     /// one fitted to the field it went into is not the one to paste anywhere else (#163).
     ///
     /// The text is offered lazily: the pasteboard only gets it when someone asks for it, and that
-    /// request is the paste landing. With `rich`, the same item also offers the text as RTF and
-    /// HTML (#166), just as lazily: a read of any of the three is the landing, and the plain
-    /// string stays on it for every app that reads nothing else. So the clipboard comes back a short while after the app in
+    /// request is the paste landing. So the clipboard comes back a short while after the app in
     /// front actually read the text, not a fixed time after the keystroke, which a busy app could
     /// lose (#162). When nobody asks before the deadline, `outcome` reports `.missed` and the
-    /// clipboard ends up as `afterMissing` says.
+    /// clipboard ends up as `afterMissing` says. With `rich`, the same item also offers the text
+    /// as RTF and HTML (#166), just as lazily: a read of any of them is the landing, and the
+    /// plain string stays on it for every app that reads nothing else.
     ///
     /// Clipboard managers poll the pasteboard too, and their read would look like the paste. The
     /// transient markers keep the ones that honour nspasteboard.org (Raycast, Maccy, Paste) to a
