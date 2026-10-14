@@ -726,6 +726,12 @@ final class AppPreferences {
     @UserDefault(key: "notifyWhenNoPasteTarget", defaultValue: true)
     var notifyWhenNoPasteTarget: Bool
 
+    /// Put the focus back in the field the dictation started in before inserting, when the user
+    /// has clicked elsewhere while it was transcribed (#164). On by default; some people dictate
+    /// and then deliberately move to the field the text is meant for.
+    @UserDefault(key: "pasteIntoOriginalField", defaultValue: true)
+    var pasteIntoOriginalField: Bool
+
     /// When on, a trailing "press enter" in the dictation is removed from the text and a Return
     /// key is pressed after the text is inserted — submitting the message/prompt (Claude Code,
     /// Slack, …). Opt-in: a stray Return can submit a form prematurely. See `stripSubmitCommand`.

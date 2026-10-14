@@ -53,6 +53,9 @@ final class RecordingContext {
     /// and the focus may have left the field entirely. Kept in memory only: it is the contents
     /// of someone's document and it has no business being written to disk.
     private(set) var focusedText: String?
+    /// The field that had the focus when recording started, so the text can go back to it if
+    /// the user clicks elsewhere while it is transcribed (#164).
+    private(set) var focusTarget: FocusTarget?
     private init() {}
 
     func update(appName: String?, bundleID: String?, host: String? = nil,
@@ -75,10 +78,23 @@ final class RecordingContext {
     /// the active context. Opening a status-bar menu doesn't steal focus, so this
     /// is the app the cursor is in. If our own app is frontmost, keep the previous
     /// context.
-    func captureFrontmost() {
-        guard let front = NSWorkspace.shared.frontmostApplication,
-              let bundle = front.bundleIdentifier,
-              bundle != Bundle.main.bundleIdentifier
+    ///
+    /// - Parameter forRecording: a recording is starting, so the field it starts in is worth
+    ///   remembering. The status-bar menu passes `false`: it only needs the app for the model
+    ///   rules, the field lookup would be Accessibility traffic on the main thread for nothing,
+    ///   and a recording under way keeps the field it started in.
+    func captureFrontmost(forRecording: Bool = true) {
+        let prefs = AppPreferences.shared
+        let front = NSWorkspace.shared.frontmostApplication
+        if forRecording {
+            // A field left over from an earlier dictation is never where this one started.
+            let wanted = Self.wantsFocusTarget(frontBundleID: front?.bundleIdentifier,
+                                               ownBundleID: Bundle.main.bundleIdentifier,
+                                               autoPaste: prefs.autoPasteTranscription,
+                                               pasteIntoOriginalField: prefs.pasteIntoOriginalField)
+            focusTarget = wanted ? front.map(FocusTarget.capture) : nil
+        }
+        guard let front, let bundle = front.bundleIdentifier, bundle != Bundle.main.bundleIdentifier
         else { return }
         let url = SourceCapture.browserURL(bundleID: bundle)
         let host = SourceCapture.host(of: url)
@@ -86,10 +102,14 @@ final class RecordingContext {
         // Only read the field when the setting asks for it AND the engine can use it. Reading
         // what someone is writing is not something to do speculatively and then discard, and an
         // engine that takes no prompt would have it discarded.
-        let wantsField = AppPreferences.shared.useSurroundingTextAsContext
-            && EngineCapabilities.supportsFieldContext(engine: AppPreferences.shared.selectedEngine)
-        let written = wantsField ? SourceCapture.focusedText() : nil
-        let prefs = AppPreferences.shared
+        let wantsField = prefs.useSurroundingTextAsContext
+            && EngineCapabilities.supportsFieldContext(engine: prefs.selectedEngine)
+        // An element captured just now is the one the text would be read from: no second
+        // lookup. Only just now: from the menu, focusTarget belongs to the recording under way.
+        let capturedElement = forRecording ? focusTarget?.element : nil
+        let written = wantsField
+            ? (capturedElement.map(SourceCapture.focusedText(in:)) ?? SourceCapture.focusedText())
+            : nil
         let layoutLanguage = prefs.whisperLanguage == KeyboardLanguage.selectionCode
             ? KeyboardLanguage.current(engine: prefs.selectedEngine,
                                        fluidAudioModelVersion: prefs.fluidAudioModelVersion)
@@ -97,6 +117,14 @@ final class RecordingContext {
         update(appName: front.localizedName, bundleID: bundle, host: host,
                fullURL: url, windowTitle: title, focusedText: written,
                keyboardLanguage: layoutLanguage)
+    }
+
+    /// Whether to remember the field a recording starts in (#164). Only when the text will be
+    /// pasted back at all, and never for our own window: a dictation made there must not be
+    /// sent back to another app. Pure, for testing.
+    static func wantsFocusTarget(frontBundleID: String?, ownBundleID: String?,
+                                 autoPaste: Bool, pasteIntoOriginalField: Bool) -> Bool {
+        autoPaste && pasteIntoOriginalField && frontBundleID != nil && frontBundleID != ownBundleID
     }
 
     // One-time model override. "Just This Time" makes the *next* recording in an

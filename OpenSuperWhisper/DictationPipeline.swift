@@ -31,6 +31,9 @@ final class DictationPipeline: ObservableObject {
         /// Snapshotted like the rest: by the time the queue reaches this clip the caret has
         /// usually moved, and a later recording would otherwise lend it its own field.
         var focusedText: String? = nil
+        /// The field that had the focus at record start, where the text goes back to even if the
+        /// user has clicked elsewhere by the time it is transcribed (#164).
+        var focusTarget: FocusTarget? = nil
         /// The waiting agent this dictation answers, from the agent panel. Its text goes back
         /// to that agent instead of into the focused app.
         var agentReplyID: String? = nil
@@ -291,7 +294,14 @@ final class DictationPipeline: ObservableObject {
                 return
             }
 
-            let pasteTargetMissing = hasText ? insertText(text, targetBundleID: item.context.bundleID) : false
+            let delivery: Delivery
+            if hasText {
+                delivery = await deliver(text, context: item.context)
+            } else if shouldSubmit {
+                delivery = await deliverSubmitOnly(context: item.context)
+            } else {
+                delivery = .inserted
+            }
             if hasText {
                 PostRecordHook.runIfEnabled(text: text, rawText: engineText,
                                             bundleID: item.context.bundleID,
@@ -301,13 +311,14 @@ final class DictationPipeline: ObservableObject {
 
             // Submit only when auto-paste actually inserted text somewhere. A short settle delay lets
             // the pasted text land in the field before Return reaches it.
-            if shouldSubmit && AppPreferences.shared.autoPasteTranscription && !pasteTargetMissing {
+            if shouldSubmit && AppPreferences.shared.autoPasteTranscription && delivery == .inserted {
                 try? await Task.sleep(nanoseconds: 120_000_000)
                 TextInserter.pressReturn()
             }
 
-            // No editable target was found — the text is on the clipboard; tell the user to paste it.
-            if pasteTargetMissing {
+            // No editable target was found, or the app it was dictated into has gone — the text is
+            // on the clipboard; tell the user to paste it.
+            if delivery == .onClipboardAnnounced {
                 IndicatorWindowManager.shared.flash(.info("Copied — press ⌘V to paste"))
             }
         } catch {
@@ -380,6 +391,72 @@ final class DictationPipeline: ObservableObject {
             print("Failed to persist failed recording: \(error)")
             return nil
         }
+    }
+
+    /// Where a finished dictation went, which decides whether Return follows and what is said.
+    enum Delivery: Equatable {
+        /// Inserted, or left alone because auto-paste is off.
+        case inserted
+        /// On the clipboard for a manual ⌘V, and the user is told so.
+        case onClipboardAnnounced
+        /// Not inserted, with the warning off: held for the paste-last shortcut.
+        case held
+    }
+
+    /// Puts the focus back in the field the dictation started in, then inserts (#164).
+    private func deliver(_ text: String, context: ContextSnapshot) async -> Delivery {
+        let prefs = AppPreferences.shared
+        return await Self.deliver(
+            to: context.focusTarget,
+            returningFocus: prefs.autoPasteTranscription && prefs.pasteIntoOriginalField,
+            warn: prefs.notifyWhenNoPasteTarget,
+            keepOnClipboard: prefs.autoCopyToClipboard,
+            bringBack: { await FocusReturn.bringBack($0) },
+            hold: { TranscriptInserter.holdUndelivered(IndicatorViewModel.applyPostProcessing(text),
+                                                       onClipboard: $0) },
+            insert: { self.insertText(text, targetBundleID: context.bundleID) })
+    }
+
+    /// A dictation that is only the spoken submit command presses Return in the app it started
+    /// in, like any text would go there, and not at all when that app cannot be brought back.
+    private func deliverSubmitOnly(context: ContextSnapshot) async -> Delivery {
+        let prefs = AppPreferences.shared
+        return await Self.deliverSubmitOnly(
+            to: context.focusTarget,
+            returningFocus: prefs.autoPasteTranscription && prefs.pasteIntoOriginalField,
+            bringBack: { await FocusReturn.bringBack($0) })
+    }
+
+    /// `.held` when Return must not be pressed: there is no text to hold or announce.
+    static func deliverSubmitOnly(to target: FocusTarget?, returningFocus: Bool,
+                                  bringBack: (FocusTarget) async -> FocusReturn.Outcome) async -> Delivery {
+        await deliver(to: target, returningFocus: returningFocus, warn: false, keepOnClipboard: false,
+                      bringBack: bringBack, hold: { _ in }, insert: { false })
+    }
+
+    /// The delivery with the system passed in, so tests can run it without moving the focus or
+    /// posting a keystroke.
+    ///
+    /// - Parameters:
+    ///   - returningFocus: the setting is on and the text is going to be inserted at all. With
+    ///     auto-paste off nothing would follow the focus change, and pulling the user back to
+    ///     another app for nothing is worse than leaving them where they are.
+    ///   - hold: keeps the text for a manual paste, on the clipboard when passed `true`.
+    ///   - insert: the usual insertion; `true` when it found no field and copied instead.
+    static func deliver(to target: FocusTarget?, returningFocus: Bool, warn: Bool,
+                        keepOnClipboard: Bool,
+                        bringBack: (FocusTarget) async -> FocusReturn.Outcome,
+                        hold: (_ onClipboard: Bool) -> Void,
+                        insert: () -> Bool) async -> Delivery {
+        if returningFocus, let target {
+            let outcome = await bringBack(target)
+            Diag.mark("focus return before insertion: \(outcome)")
+            if outcome == .unreachable {
+                hold(warn || keepOnClipboard)
+                return warn ? .onClipboardAnnounced : .held
+            }
+        }
+        return insert() ? .onClipboardAnnounced : .inserted
     }
 
     /// Returns `true` when auto-paste ran but no editable field was focused, so the caller can leave

@@ -332,6 +332,7 @@ class IndicatorViewModel: ObservableObject {
             windowTitle: ctx.windowTitle, fullURL: ctx.fullURL,
             keyboardLanguage: ctx.keyboardLanguage,
             focusedText: ctx.focusedText,
+            focusTarget: ctx.focusTarget,
             agentReplyID: agentReplyID)
         let modelOption = ModelCatalog.activeOption()
 

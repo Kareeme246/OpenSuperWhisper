@@ -55,7 +55,11 @@ enum SourceCapture {
             app, kAXFocusedUIElementAttribute as CFString, &focusedRef
         ) == .success, let focusedRef else { return nil }
 
-        let element = focusedRef as! AXUIElement
+        return focusedText(in: focusedRef as! AXUIElement)
+    }
+
+    /// The same, from a focused element already in hand.
+    static func focusedText(in element: AXUIElement) -> String? {
         AXUIElementSetMessagingTimeout(element, FocusUtils.axMessagingTimeout)
 
         var valueRef: AnyObject?

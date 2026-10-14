@@ -434,7 +434,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
     // Opening a status-bar menu doesn't steal focus, so the frontmost app is still
     // the one the cursor is in.
     func menuWillOpen(_ menu: NSMenu) {
-        RecordingContext.shared.captureFrontmost()
+        RecordingContext.shared.captureFrontmost(forRecording: false)
     }
 
     // Rebuild the Model submenu just before it opens, so it reflects the latest
