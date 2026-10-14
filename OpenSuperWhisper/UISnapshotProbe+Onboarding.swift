@@ -17,6 +17,16 @@ extension UISnapshotProbe {
         "onboarding-shortcut-custom": { onboarding(.shortcut, custom: controlOptionD) },
         "onboarding-shortcut-custom-modifier": { onboarding(.shortcut, custom: .modifier(.rightCommand)) },
         "onboarding-shortcut-custom-empty": { onboarding(.shortcut, choice: .custom) },
+        "onboarding-shortcut-custom-mouse": { onboarding(.shortcut, custom: .mouse(.button4)) },
+        "onboarding-shortcut-custom-chord": {
+            onboarding(.shortcut, custom: ModifierChord([.command, .option]).map { .chord($0) })
+        },
+        "onboarding-shortcut-custom-combination-large-text": {
+            onboarding(.shortcut, custom: controlOptionD, textScale: TextScale.maximum)
+        },
+        "onboarding-shortcut-custom-empty-large-text": {
+            onboarding(.shortcut, choice: .custom, textScale: TextScale.maximum)
+        },
         "onboarding-shortcut-custom-large-text": {
             onboarding(.shortcut, custom: .modifier(.rightCommand), textScale: TextScale.maximum)
         },
