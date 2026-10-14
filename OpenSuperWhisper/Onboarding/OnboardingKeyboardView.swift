@@ -46,6 +46,8 @@ struct OnboardingKeyboardView: View {
             return id == "leftOption" || id == "tilde"
         case .rightOption:
             return id == "rightOption"
+        case .custom:
+            return false
         }
     }
     

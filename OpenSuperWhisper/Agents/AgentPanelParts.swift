@@ -86,7 +86,9 @@ struct AgentShortcutHints {
             ?? (submit == .none ? nil : submit.caps.joined(separator: " "))
     }
 
-    @MainActor static func current(listening: Bool) -> [AgentShortcutHints] {
+    /// `canOpenHost` says the header has its terminal button. ⌘O does the same thing, so it is
+    /// listed only then, and last: the first hint to go when the row runs out of room.
+    @MainActor static func current(listening: Bool, canOpenHost: Bool) -> [AgentShortcutHints] {
         let prefs = AppPreferences.shared
         let trigger = RecordingTriggerSet.load(from: prefs.recordingTriggers).triggers.first
             .map { $0.caps.joined(separator: " ") }
@@ -101,6 +103,39 @@ struct AgentShortcutHints {
             hints.append(.init(keys: "⏎", action: "send"))
             hints.append(.init(keys: "⇧⏎", action: "new line"))
         }
+        if canOpenHost {
+            hints.append(.init(keys: "⌘O", action: String(localized: "terminal", comment:
+                "Agent panel shortcut hint: what ⌘O does (brings back the terminal the agent runs in).")))
+        }
         return hints
     }
+}
+
+/// Back to the terminal the agent runs in, next to the close button and drawn like it. Hidden
+/// when the hook could not tell where that is.
+struct AgentOpenHostButton: View {
+    let request: AgentRequest
+    /// The host's name, looked up once per request: the lookup asks LaunchServices, and the
+    /// header is redrawn on every keystroke in the reply.
+    @State private var hostName: (requestID: String, name: String?)?
+
+    var body: some View {
+        if let target = AgentHostJump.target(for: request) {
+            Button { AgentHostJump.open(request) } label: {
+                Image(systemName: "terminal")
+                    .scaledFont(size: 12, weight: .semibold)
+                    .foregroundColor(STheme.textSecondary)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(STheme.fill))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .pointerCursorOnHover()
+            .accessibilityLabel(name.map { Text("Open in \($0)") } ?? Text("Open in terminal"))
+            .help(name.map { Text("Open in \($0) (⌘O)") } ?? Text("Open in terminal (⌘O)"))
+            .task(id: request.id) { hostName = (request.id, WorkspaceHostOpener.appName(of: target)) }
+        }
+    }
+
+    private var name: String? { hostName?.requestID == request.id ? hostName?.name : nil }
 }

@@ -8,6 +8,8 @@ import SwiftUI
 struct OnboardingPermissionsStep: View {
     @ObservedObject var permissions: PermissionsManager
     let needsInputMonitoring: Bool
+    /// The shortcut, as the user will press it ("⌥ right").
+    let triggerLabel: String
     let inputMonitoringGranted: Bool
     let allGranted: Bool
 
@@ -35,7 +37,7 @@ struct OnboardingPermissionsStep: View {
                 }
                 if needsInputMonitoring {
                     SettingRow("Input Monitoring",
-                               hint: "To notice right ⌥ while another app is in front. macOS asks once, when the app starts listening for the key. Only modifier keys are watched.") {
+                               hint: "To notice \(triggerLabel) while another app is in front. macOS asks once, when the app starts listening for the key. Only modifier keys are watched.") {
                         if inputMonitoringGranted {
                             GrantedLabel()
                         } else {
