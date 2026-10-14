@@ -86,7 +86,9 @@ struct AgentShortcutHints {
             ?? (submit == .none ? nil : submit.caps.joined(separator: " "))
     }
 
-    @MainActor static func current(listening: Bool) -> [AgentShortcutHints] {
+    /// `canOpenHost` says the header has its terminal button. ⌘O does the same thing, so it is
+    /// listed only then, and last: the first hint to go when the row runs out of room.
+    @MainActor static func current(listening: Bool, canOpenHost: Bool) -> [AgentShortcutHints] {
         let prefs = AppPreferences.shared
         let trigger = RecordingTriggerSet.load(from: prefs.recordingTriggers).triggers.first
             .map { $0.caps.joined(separator: " ") }
@@ -100,6 +102,10 @@ struct AgentShortcutHints {
             if let trigger { hints.append(.init(keys: trigger, action: "dictate")) }
             hints.append(.init(keys: "⏎", action: "send"))
             hints.append(.init(keys: "⇧⏎", action: "new line"))
+        }
+        if canOpenHost {
+            hints.append(.init(keys: "⌘O", action: String(localized: "terminal", comment:
+                "Agent panel shortcut hint: what ⌘O does (brings back the terminal the agent runs in).")))
         }
         return hints
     }

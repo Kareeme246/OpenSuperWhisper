@@ -18280,6 +18280,17 @@
           }
         }
       }
+    },
+    "terminal": {
+      "comment": "Agent panel shortcut hint: what ⌘O does (brings back the terminal the agent runs in).",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "terminal"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

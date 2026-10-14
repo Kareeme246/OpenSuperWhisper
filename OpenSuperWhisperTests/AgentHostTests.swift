@@ -257,6 +257,21 @@ final class AgentHostTests: XCTestCase {
         XCTAssertFalse(AgentHostJump.open(request(), with: opener))
         XCTAssertEqual(opener.calls, [])
     }
+
+    // MARK: The hint
+
+    /// ⌘O is listed with the other keys exactly when the header has the button, last, so it is
+    /// the one left out when the row runs short.
+    @MainActor
+    func testTheTerminalKeyIsListedLastOnlyWithSomewhereToGo() {
+        for listening in [false, true] {
+            let hints = AgentShortcutHints.current(listening: listening, canOpenHost: true)
+            XCTAssertEqual(hints.last?.keys, "⌘O", "listening: \(listening)")
+            XCTAssertEqual(hints.filter { $0.keys == "⌘O" }.count, 1)
+            XCTAssertFalse(AgentShortcutHints.current(listening: listening, canOpenHost: false)
+                .contains { $0.keys == "⌘O" }, "listening: \(listening)")
+        }
+    }
 }
 
 private struct FakeProcessTable: ProcessTable {
