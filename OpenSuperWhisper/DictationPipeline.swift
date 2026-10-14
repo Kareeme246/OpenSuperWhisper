@@ -294,7 +294,14 @@ final class DictationPipeline: ObservableObject {
                 return
             }
 
-            let delivery = hasText ? await deliver(text, context: item.context) : .inserted
+            let delivery: Delivery
+            if hasText {
+                delivery = await deliver(text, context: item.context)
+            } else if shouldSubmit {
+                delivery = await deliverSubmitOnly(context: item.context)
+            } else {
+                delivery = .inserted
+            }
             if hasText {
                 PostRecordHook.runIfEnabled(text: text, rawText: engineText,
                                             bundleID: item.context.bundleID,
@@ -408,6 +415,23 @@ final class DictationPipeline: ObservableObject {
             hold: { TranscriptInserter.holdUndelivered(IndicatorViewModel.applyPostProcessing(text),
                                                        onClipboard: $0) },
             insert: { self.insertText(text, targetBundleID: context.bundleID) })
+    }
+
+    /// A dictation that is only the spoken submit command presses Return in the app it started
+    /// in, like any text would go there, and not at all when that app cannot be brought back.
+    private func deliverSubmitOnly(context: ContextSnapshot) async -> Delivery {
+        let prefs = AppPreferences.shared
+        return await Self.deliverSubmitOnly(
+            to: context.focusTarget,
+            returningFocus: prefs.autoPasteTranscription && prefs.pasteIntoOriginalField,
+            bringBack: { await FocusReturn.bringBack($0) })
+    }
+
+    /// `.held` when Return must not be pressed: there is no text to hold or announce.
+    static func deliverSubmitOnly(to target: FocusTarget?, returningFocus: Bool,
+                                  bringBack: (FocusTarget) async -> FocusReturn.Outcome) async -> Delivery {
+        await deliver(to: target, returningFocus: returningFocus, warn: false, keepOnClipboard: false,
+                      bringBack: bringBack, hold: { _ in }, insert: { false })
     }
 
     /// The delivery with the system passed in, so tests can run it without moving the focus or

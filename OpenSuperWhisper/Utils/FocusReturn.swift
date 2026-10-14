@@ -1,6 +1,27 @@
 import AppKit
 import ApplicationServices
 
+/// How much text a field held and what was selected in it, to tell later whether it changed.
+struct FieldSnapshot: Equatable {
+    let characterCount: Int
+    let selection: NSRange
+
+    /// From the raw `kAXNumberOfCharacters` and `kAXSelectedTextRange` answers. nil unless both
+    /// came back: a caret is only worth putting back when there is a way to tell it is still valid.
+    init?(characterCount: CFTypeRef?, selection: CFTypeRef?) {
+        guard let count = characterCount as? Int, let selection,
+              CFGetTypeID(selection) == AXValueGetTypeID() else { return nil }
+        var range = CFRange()
+        guard AXValueGetValue(selection as! AXValue, .cfRange, &range) else { return nil }
+        self.init(characterCount: count, selection: NSRange(location: range.location, length: range.length))
+    }
+
+    init(characterCount: Int, selection: NSRange) {
+        self.characterCount = characterCount
+        self.selection = selection
+    }
+}
+
 /// The field a dictation started in, kept so its text can go back there once transcribed (#164).
 ///
 /// Transcription runs after the recording stops, and with a long clip or a slow model the user
@@ -14,9 +35,9 @@ struct FocusTarget {
     /// what Chrome and Electron answer while their accessibility tree is off: the app alone is
     /// then all there is to go back to.
     let element: AXUIElement?
-    /// Where the caret was in that element. Put back after refocusing, because a text field
-    /// that regains the focus selects all of its text, and the paste would replace it.
-    let selection: AXValue?
+    /// Its length and caret then, so the caret can be put back after refocusing if nothing has
+    /// been written there since (see `FocusReturn.selectionToSet`).
+    let field: FieldSnapshot?
 
     /// The focused element of `app` right now, with its caret.
     static func capture(_ app: NSRunningApplication) -> FocusTarget {
@@ -27,16 +48,20 @@ struct FocusTarget {
         guard AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString,
                                             &focused) == .success, let focused else {
             return FocusTarget(pid: app.processIdentifier, bundleID: app.bundleIdentifier,
-                               element: nil, selection: nil)
+                               element: nil, field: nil)
         }
         let element = focused as! AXUIElement
         AXUIElementSetMessagingTimeout(element, FocusUtils.axMessagingTimeout)
 
+        var count: CFTypeRef?
         var range: CFTypeRef?
-        let hasRange = AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString,
-                                                     &range) == .success
+        // The second question is not asked of an element that did not answer the first.
+        if AXUIElementCopyAttributeValue(element, kAXNumberOfCharactersAttribute as CFString,
+                                         &count) == .success {
+            AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &range)
+        }
         return FocusTarget(pid: app.processIdentifier, bundleID: app.bundleIdentifier,
-                           element: element, selection: hasRange ? range.map { $0 as! AXValue } : nil)
+                           element: element, field: FieldSnapshot(characterCount: count, selection: range))
     }
 }
 
@@ -52,9 +77,12 @@ protocol FocusControlling {
     func stillFocused(_ target: FocusTarget) -> Bool?
     /// Brings the app in front. false when the system refused.
     func activate(_ target: FocusTarget) -> Bool
-    /// Raises the element's window, focuses the element and puts its caret back. false when the
-    /// element is gone or would not take the focus.
+    /// Raises the element's window and focuses the element. false when the element is gone or
+    /// would not take the focus.
     func focus(_ target: FocusTarget) -> Bool
+    /// The element's length and selection now. nil when it would not say.
+    func field(_ target: FocusTarget) -> FieldSnapshot?
+    func select(_ range: NSRange, in target: FocusTarget)
     /// Gives the app a moment to act on the focus change before anything is typed into it.
     func settle() async
 }
@@ -83,27 +111,64 @@ enum FocusReturn {
             // Another field of the same app, or the same one: only a definite "moved" is acted
             // on, so an app that cannot answer behaves as it did before this feature.
             guard target.element != nil, system.stillFocused(target) == false else { return .alreadyThere }
-            let outcome: Outcome = system.focus(target) ? .refocused : .appOnly
+            let outcome: Outcome = refocus(target, using: system) ? .refocused : .appOnly
             await system.settle()
             return outcome
         }
 
         guard system.activate(target) else { return .unreachable }
-        let outcome: Outcome = target.element != nil && system.focus(target) ? .refocused : .appOnly
+        let outcome: Outcome = refocus(target, using: system) ? .refocused : .appOnly
         await system.settle()
         // An activation the system accepted and then did not carry out leaves someone else in
         // front, and the text would land there.
         return system.frontmostPID() == target.pid ? outcome : .unreachable
     }
+
+    @MainActor
+    private static func refocus(_ target: FocusTarget, using system: FocusControlling) -> Bool {
+        guard target.element != nil, system.focus(target) else { return false }
+        if let range = selectionToSet(captured: target.field, now: system.field(target)) {
+            system.select(range, in: target)
+        }
+        return true
+    }
+
+    /// Where the caret goes once the field has the focus back, or nil to leave it.
+    ///
+    /// The caret from record start is only valid while the field holds what it held then.
+    /// Dictations queue up: a second one started in the same field before the first was
+    /// inserted shares its caret, and putting that back would land the second text before the
+    /// first, or replace text that has moved under a selection. So a field that changed keeps
+    /// the caret it gives itself, except that a text field regaining the focus selects all of
+    /// its text, which the paste would replace: that selection collapses to the end. Pure, for
+    /// testing.
+    static func selectionToSet(captured: FieldSnapshot?, now: FieldSnapshot?) -> NSRange? {
+        guard let now else { return nil }
+        if let captured, captured.characterCount == now.characterCount {
+            return captured.selection == now.selection ? nil : captured.selection
+        }
+        let everything = NSRange(location: 0, length: now.characterCount)
+        return now.characterCount > 0 && now.selection == everything
+            ? NSRange(location: now.characterCount, length: 0) : nil
+    }
 }
 
 /// The real system, through Accessibility and the workspace.
+///
+/// One instance serves one delivery, on the main actor, where the hotkey tap also runs. A
+/// target that does not answer would otherwise cost the full messaging timeout on each of the
+/// half dozen requests a refocus makes, so the first request it lets time out ends the attempt:
+/// every later one is skipped and reports failure. A delivery therefore blocks the main thread
+/// for at most one `FocusUtils.axMessagingTimeout`, as the single editability check before it
+/// did.
 @MainActor
-struct LiveFocusControl: FocusControlling {
+final class LiveFocusControl: FocusControlling {
 
     /// Long enough for an activated app to bring its window forward and hand the field the
     /// focus, short enough not to be noticed on top of the transcription itself.
     static let settleDelay: Duration = .milliseconds(200)
+
+    private var unresponsive = false
 
     nonisolated init() {}
 
@@ -120,10 +185,8 @@ struct LiveFocusControl: FocusControlling {
 
     func stillFocused(_ target: FocusTarget) -> Bool? {
         guard let element = target.element else { return nil }
-        let app = AXUIElementCreateApplication(target.pid)
-        AXUIElementSetMessagingTimeout(app, FocusUtils.axMessagingTimeout)
         var focused: CFTypeRef?
-        let err = AXUIElementCopyAttributeValue(app, kAXFocusedUIElementAttribute as CFString, &focused)
+        let err = copy(kAXFocusedUIElementAttribute, of: AXUIElementCreateApplication(target.pid), into: &focused)
         guard err == .success, let focused else {
             // Nothing focused at all is an answer: the user clicked off the field.
             return FocusUtils.reportsNothingFocused(err) ? false : nil
@@ -134,26 +197,32 @@ struct LiveFocusControl: FocusControlling {
     /// Through Accessibility first: since macOS 14 activation is cooperative, and an app that is
     /// not active itself (which OpenSuperWhisper is not, while it transcribes in the background)
     /// has nothing to yield. The workspace request is the fallback when the app refuses the
-    /// accessibility one.
+    /// accessibility one, and asks nothing of the app itself.
     func activate(_ target: FocusTarget) -> Bool {
         let app = AXUIElementCreateApplication(target.pid)
-        AXUIElementSetMessagingTimeout(app, FocusUtils.axMessagingTimeout)
-        if AXUIElementSetAttributeValue(app, kAXFrontmostAttribute as CFString, kCFBooleanTrue) == .success {
-            return true
-        }
+        if set(kAXFrontmostAttribute, of: app, to: kCFBooleanTrue) == .success { return true }
         return NSRunningApplication(processIdentifier: target.pid)?.activate(options: []) ?? false
     }
 
     func focus(_ target: FocusTarget) -> Bool {
         guard let element = target.element else { return false }
-        AXUIElementSetMessagingTimeout(element, FocusUtils.axMessagingTimeout)
         raiseWindow(of: element)
-        guard AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString,
-                                           kCFBooleanTrue) == .success else { return false }
-        if let selection = target.selection {
-            AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, selection)
-        }
-        return true
+        return set(kAXFocusedAttribute, of: element, to: kCFBooleanTrue) == .success
+    }
+
+    func field(_ target: FocusTarget) -> FieldSnapshot? {
+        guard let element = target.element else { return nil }
+        var count: CFTypeRef?
+        var range: CFTypeRef?
+        guard copy(kAXNumberOfCharactersAttribute, of: element, into: &count) == .success else { return nil }
+        copy(kAXSelectedTextRangeAttribute, of: element, into: &range)
+        return FieldSnapshot(characterCount: count, selection: range)
+    }
+
+    func select(_ range: NSRange, in target: FocusTarget) {
+        var cfRange = CFRange(location: range.location, length: range.length)
+        guard let element = target.element, let value = AXValueCreate(.cfRange, &cfRange) else { return }
+        set(kAXSelectedTextRangeAttribute, of: element, to: value)
     }
 
     func settle() async {
@@ -164,11 +233,32 @@ struct LiveFocusControl: FocusControlling {
     /// an element does not bring its window forward.
     private func raiseWindow(of element: AXUIElement) {
         var windowRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXWindowAttribute as CFString,
-                                            &windowRef) == .success, let windowRef else { return }
+        guard copy(kAXWindowAttribute, of: element, into: &windowRef) == .success, let windowRef else { return }
         let window = windowRef as! AXUIElement
+        set(kAXMainAttribute, of: window, to: kCFBooleanTrue)
+        guard !unresponsive else { return }
         AXUIElementSetMessagingTimeout(window, FocusUtils.axMessagingTimeout)
-        AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
-        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        note(AXUIElementPerformAction(window, kAXRaiseAction as CFString))
+    }
+
+    @discardableResult
+    private func copy(_ attribute: String, of element: AXUIElement, into value: inout CFTypeRef?) -> AXError {
+        guard !unresponsive else { return .cannotComplete }
+        AXUIElementSetMessagingTimeout(element, FocusUtils.axMessagingTimeout)
+        return note(AXUIElementCopyAttributeValue(element, attribute as CFString, &value))
+    }
+
+    @discardableResult
+    private func set(_ attribute: String, of element: AXUIElement, to value: CFTypeRef) -> AXError {
+        guard !unresponsive else { return .cannotComplete }
+        AXUIElementSetMessagingTimeout(element, FocusUtils.axMessagingTimeout)
+        return note(AXUIElementSetAttributeValue(element, attribute as CFString, value))
+    }
+
+    /// `cannotComplete` is what a request that timed out returns.
+    @discardableResult
+    private func note(_ error: AXError) -> AXError {
+        if error == .cannotComplete { unresponsive = true }
+        return error
     }
 }

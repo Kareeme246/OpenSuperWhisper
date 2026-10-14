@@ -23,6 +23,9 @@ final class FocusReturnTests: XCTestCase {
         var focuses = true
         /// Who is in front once an accepted activation has settled.
         var frontmostAfterActivation: pid_t? = FocusReturnTests.targetPID
+        /// What the field holds once it has the focus back.
+        var field: FieldSnapshot?
+        private(set) var selected: [NSRange] = []
         private(set) var calls: [String] = []
 
         init(frontmost: pid_t?) { self.frontmost = [frontmost] }
@@ -36,15 +39,17 @@ final class FocusReturnTests: XCTestCase {
             return activates
         }
         func focus(_ target: FocusTarget) -> Bool { calls.append("focus"); return focuses }
+        func field(_ target: FocusTarget) -> FieldSnapshot? { calls.append("field"); return field }
+        func select(_ range: NSRange, in target: FocusTarget) { calls.append("select"); selected.append(range) }
         func settle() async { calls.append("settle") }
     }
 
     /// An element is only compared and handed back to the fake, never messaged: creating one
     /// asks nothing of the app it names.
-    private func target(withField: Bool = true) -> FocusTarget {
+    private func target(withField: Bool = true, field: FieldSnapshot? = nil) -> FocusTarget {
         FocusTarget(pid: Self.targetPID, bundleID: "com.example.notes",
                     element: withField ? AXUIElementCreateApplication(Self.targetPID) : nil,
-                    selection: nil)
+                    field: field)
     }
 
     // MARK: - Another app in front
@@ -55,7 +60,7 @@ final class FocusReturnTests: XCTestCase {
         let outcome = await FocusReturn.bringBack(target(), using: system)
 
         XCTAssertEqual(outcome, .refocused)
-        XCTAssertEqual(system.calls, ["running", "activate", "focus", "settle"])
+        XCTAssertEqual(system.calls, ["running", "activate", "focus", "field", "settle"])
     }
 
     /// Chrome and Electron often say nothing about their focused element: the app is still
@@ -138,7 +143,7 @@ final class FocusReturnTests: XCTestCase {
         let outcome = await FocusReturn.bringBack(target(), using: system)
 
         XCTAssertEqual(outcome, .refocused)
-        XCTAssertEqual(system.calls, ["running", "stillFocused", "focus", "settle"])
+        XCTAssertEqual(system.calls, ["running", "stillFocused", "focus", "field", "settle"])
     }
 
     func testTheSameAppWithoutANamedFieldIsLeftAlone() async {
@@ -148,6 +153,67 @@ final class FocusReturnTests: XCTestCase {
 
         XCTAssertEqual(outcome, .alreadyThere)
         XCTAssertFalse(system.calls.contains("activate"))
+    }
+
+    // MARK: - The caret
+
+    private static func field(_ count: Int, _ location: Int, _ length: Int = 0) -> FieldSnapshot {
+        FieldSnapshot(characterCount: count, selection: NSRange(location: location, length: length))
+    }
+
+    func testTheCaretIsPutBackInAFieldNothingWasWrittenTo() async {
+        let system = FakeSystem(frontmost: Self.otherPID)
+        system.field = Self.field(50, 0, 50)
+
+        _ = await FocusReturn.bringBack(target(field: Self.field(50, 10)), using: system)
+
+        XCTAssertEqual(system.selected, [NSRange(location: 10, length: 0)])
+    }
+
+    /// Two dictations started at the same caret in the same field, the second before the first
+    /// was inserted. The user moves away after each. The second must land after the first, not
+    /// at the caret they shared, which is now before it.
+    func testASecondDictationInTheSameFieldLandsAfterTheFirst() async {
+        let atRecordStart = Self.field(50, 10)
+        let first = target(field: atRecordStart)
+        let second = target(field: atRecordStart)
+        let system = FakeSystem(frontmost: Self.otherPID)
+        system.field = Self.field(50, 0, 50)
+
+        _ = await FocusReturn.bringBack(first, using: system)
+        // The first text (5 characters) went in at its caret, then the user moved away again.
+        system.frontmost.append(Self.otherPID)
+        system.field = Self.field(55, 15)
+        _ = await FocusReturn.bringBack(second, using: system)
+
+        XCTAssertEqual(system.selected, [NSRange(location: 10, length: 0)],
+                       "the field keeps its own caret, after the first text")
+    }
+
+    /// A text field that regains the focus selects everything, and a stale caret cannot be
+    /// trusted to undo that: the paste would replace the whole field.
+    func testAChangedFieldThatSelectedEverythingIsNotReplaced() async {
+        let system = FakeSystem(frontmost: Self.otherPID)
+        system.field = Self.field(55, 0, 55)
+
+        _ = await FocusReturn.bringBack(target(field: Self.field(50, 10, 5)), using: system)
+
+        XCTAssertEqual(system.selected, [NSRange(location: 55, length: 0)])
+    }
+
+    func testTheSelectionDecision() {
+        typealias F = FocusReturnTests
+        XCTAssertEqual(FocusReturn.selectionToSet(captured: F.field(50, 10, 3), now: F.field(50, 0, 50)),
+                       NSRange(location: 10, length: 3), "unchanged field: the selection comes back")
+        XCTAssertNil(FocusReturn.selectionToSet(captured: F.field(50, 10), now: F.field(50, 10)),
+                     "already there: nothing to set")
+        XCTAssertNil(FocusReturn.selectionToSet(captured: F.field(50, 10), now: F.field(52, 30)),
+                     "changed field: its own caret stays")
+        XCTAssertEqual(FocusReturn.selectionToSet(captured: nil, now: F.field(52, 0, 52)),
+                       NSRange(location: 52, length: 0), "unknown start: a full selection still collapses")
+        XCTAssertNil(FocusReturn.selectionToSet(captured: nil, now: F.field(0, 0)), "an empty field")
+        XCTAssertNil(FocusReturn.selectionToSet(captured: F.field(50, 10), now: nil),
+                     "a field that will not say is left alone")
     }
 
     // MARK: - Delivery
@@ -227,6 +293,31 @@ final class FocusReturnTests: XCTestCase {
 
         XCTAssertEqual(delivery, .held)
         XCTAssertEqual(log.held, [true])
+    }
+
+    /// A dictation that is only "press enter" must not press it in the app the user moved to.
+    func testASubmitOnlyDictationIsNotPressedIntoAnotherApp() async {
+        let unreachable = await DictationPipeline.deliverSubmitOnly(
+            to: target(), returningFocus: true, bringBack: { _ in .unreachable })
+        let broughtBack = await DictationPipeline.deliverSubmitOnly(
+            to: target(), returningFocus: true, bringBack: { _ in .refocused })
+
+        XCTAssertEqual(unreachable, .held, "no Return")
+        XCTAssertEqual(broughtBack, .inserted, "Return, in the app it started in")
+    }
+
+    // MARK: - Remembering the field
+
+    func testTheFieldIsRememberedOnlyWhenTheTextWillGoBackToIt() {
+        func wants(front: String? = "com.example.notes", autoPaste: Bool = true, setting: Bool = true) -> Bool {
+            RecordingContext.wantsFocusTarget(frontBundleID: front, ownBundleID: "com.example.osw",
+                                              autoPaste: autoPaste, pasteIntoOriginalField: setting)
+        }
+        XCTAssertTrue(wants())
+        XCTAssertFalse(wants(front: "com.example.osw"), "our own window is never sent elsewhere")
+        XCTAssertFalse(wants(front: nil))
+        XCTAssertFalse(wants(setting: false))
+        XCTAssertFalse(wants(autoPaste: false), "nothing would be pasted back")
     }
 
     // MARK: - Holding the text
