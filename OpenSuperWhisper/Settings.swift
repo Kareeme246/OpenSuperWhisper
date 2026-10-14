@@ -803,6 +803,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var pasteListsAsRichText: Bool {
+        didSet {
+            AppPreferences.shared.pasteListsAsRichText = pasteListsAsRichText
+        }
+    }
+
     @Published var submitOnVoiceCommand: Bool {
         didSet {
             AppPreferences.shared.submitOnVoiceCommand = submitOnVoiceCommand
@@ -1021,6 +1027,7 @@ class SettingsViewModel: ObservableObject {
         self.notifyWhenNoPasteTarget = prefs.notifyWhenNoPasteTarget
         self.pasteIntoOriginalField = prefs.pasteIntoOriginalField
         self.matchTextAroundCaret = prefs.matchTextAroundCaret
+        self.pasteListsAsRichText = prefs.pasteListsAsRichText
         self.submitOnVoiceCommand = prefs.submitOnVoiceCommand
         self.stopPhrase = prefs.stopPhrase
         self.stopPhraseSubmits = prefs.stopPhraseSubmits

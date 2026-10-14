@@ -40,6 +40,8 @@ struct TextAndAIRubric: View {
         entry("Space between dictations", advanced: true, keywords: "space sentence espace entre deux dictées"),
         entry("Match the text around the cursor", advanced: true,
               keywords: "caret case capital lowercase period space sentence curseur majuscule minuscule point espace phrase"),
+        entry("Lists as bullets", advanced: true,
+              keywords: "rich text formatted list bullets numbers html rtf listes puces numéros texte enrichi"),
         entry("Suppress blank output", advanced: true,
               keywords: "blank audio no speech suppress blanc silence"),
         entry("Add timestamps", advanced: true, keywords: "timestamps time horodatage"),
