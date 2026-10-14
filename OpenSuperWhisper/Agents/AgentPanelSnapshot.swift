@@ -96,8 +96,16 @@ enum AgentPanelSnapshot {
         guard let directory = AgentBridge.requestsDirectory else { return [] }
         try? FileManager.default.removeItem(at: directory)
         let now = Date()
-        let requests = [
-            request(kind: .stop, title: "Faster clipboard restore", age: 40, message: stopMessage, now: now),
+        let requests: [AgentRequest] = [
+            {
+                // In a Warp pane, so the header has its "Open in terminal" button. The permission
+                // below has no host, as from an older hook, and goes without.
+                var stop = request(kind: .stop, title: "Faster clipboard restore", age: 40,
+                                   message: stopMessage, now: now)
+                stop.focusURL = "warp://session/0123456789abcdef0123456789abcdef"
+                stop.hostBundleID = "dev.warp.Warp-Stable"
+                return stop
+            }(),
             {
                 var permission = request(kind: .permission, title: "Release notes", age: 25,
                                          message: "Push the branch so the PR can be opened.", now: now)
@@ -107,6 +115,7 @@ enum AgentPanelSnapshot {
             }(),
             {
                 var question = request(kind: .question, title: "Settings search", age: 10, message: "", now: now)
+                question.hostBundleID = "com.apple.Terminal"
                 question.questions = [AgentQuestion(
                     question: "Should the search also match **French** keywords?", header: "Search",
                     options: [.init(label: "Yes, both languages", description: "Adds the French synonyms to every row."),

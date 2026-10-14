@@ -18240,6 +18240,36 @@
           }
         }
       }
+    },
+    "Open in %@ (⌘O)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir dans %@ (⌘O)"
+          }
+        }
+      }
+    },
+    "Open in terminal": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir dans le terminal"
+          }
+        }
+      }
+    },
+    "Open in terminal (⌘O)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir dans le terminal (⌘O)"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

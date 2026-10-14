@@ -104,3 +104,31 @@ struct AgentShortcutHints {
         return hints
     }
 }
+
+/// Back to the terminal the agent runs in, next to the close button and drawn like it. Hidden
+/// when the hook could not tell where that is.
+struct AgentOpenHostButton: View {
+    let request: AgentRequest
+
+    var body: some View {
+        if let target = AgentHostJump.target(for: request) {
+            Button { AgentHostJump.open(request) } label: {
+                Image(systemName: "terminal")
+                    .scaledFont(size: 12, weight: .semibold)
+                    .foregroundColor(STheme.textSecondary)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(STheme.fill))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .pointerCursorOnHover()
+            .accessibilityLabel(Text("Open in terminal"))
+            .help(tooltip(for: target))
+        }
+    }
+
+    private func tooltip(for target: AgentHostJump.Target) -> Text {
+        guard let name = WorkspaceHostOpener.appName(of: target) else { return Text("Open in terminal (⌘O)") }
+        return Text("Open in \(name) (⌘O)")
+    }
+}
