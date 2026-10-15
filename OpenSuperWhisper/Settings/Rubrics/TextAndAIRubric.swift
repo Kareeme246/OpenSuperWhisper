@@ -42,6 +42,8 @@ struct TextAndAIRubric: View {
               keywords: "caret case capital lowercase period space sentence curseur majuscule minuscule point espace phrase"),
         entry("Lists as bullets", advanced: true,
               keywords: "rich text formatted list bullets numbers html rtf listes puces numéros texte enrichi"),
+        entry("Long prompts in pieces", advanced: true,
+              keywords: "claude code codex terminal agent paste pasted text placeholder long morceaux coller invite"),
         entry("Suppress blank output", advanced: true,
               keywords: "blank audio no speech suppress blanc silence"),
         entry("Add timestamps", advanced: true, keywords: "timestamps time horodatage"),

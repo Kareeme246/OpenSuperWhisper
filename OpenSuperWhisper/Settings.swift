@@ -809,6 +809,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var pasteAgentPromptsInPieces: Bool {
+        didSet {
+            AppPreferences.shared.pasteAgentPromptsInPieces = pasteAgentPromptsInPieces
+        }
+    }
+
     @Published var submitOnVoiceCommand: Bool {
         didSet {
             AppPreferences.shared.submitOnVoiceCommand = submitOnVoiceCommand
@@ -1028,6 +1034,7 @@ class SettingsViewModel: ObservableObject {
         self.pasteIntoOriginalField = prefs.pasteIntoOriginalField
         self.matchTextAroundCaret = prefs.matchTextAroundCaret
         self.pasteListsAsRichText = prefs.pasteListsAsRichText
+        self.pasteAgentPromptsInPieces = prefs.pasteAgentPromptsInPieces
         self.submitOnVoiceCommand = prefs.submitOnVoiceCommand
         self.stopPhrase = prefs.stopPhrase
         self.stopPhraseSubmits = prefs.stopPhraseSubmits

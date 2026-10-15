@@ -233,7 +233,7 @@ final class FocusReturnTests: XCTestCase {
             keepOnClipboard: keepOnClipboard,
             bringBack: { _ in log.broughtBack += 1; return outcome },
             hold: { log.held.append($0) },
-            insert: { log.inserted += 1; return insertFindsNoField })
+            insert: { log.inserted += 1; return insertFindsNoField ? .onClipboardAnnounced : .inserted })
     }
 
     func testAReturnedFocusIsFollowedByTheUsualInsertion() async {

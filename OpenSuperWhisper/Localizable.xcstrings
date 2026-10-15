@@ -19216,6 +19216,26 @@
           }
         }
       }
+    },
+    "Long prompts in pieces": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Longues invites en morceaux"
+          }
+        }
+      }
+    },
+    "Pastes a long dictation into Claude Code or Codex a few lines at a time, so it shows in full in the prompt instead of as “[Pasted text]”. Only in a terminal whose window title names the agent.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Colle une longue dictée dans Claude Code ou Codex quelques lignes à la fois, pour qu’elle s’affiche en entier dans l’invite au lieu de « [Pasted text] ». Seulement dans un terminal dont le titre de fenêtre nomme l’agent."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

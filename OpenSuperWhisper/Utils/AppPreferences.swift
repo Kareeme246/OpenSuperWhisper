@@ -755,6 +755,15 @@ final class AppPreferences {
     @UserDefault(key: "pasteListsAsRichText", defaultValue: false)
     var pasteListsAsRichText: Bool
 
+    /// Paste a long dictation into Claude Code or Codex in a terminal a few lines at a time, so
+    /// it shows in full instead of folding into a placeholder (#165).
+    ///
+    /// Off by default until it has been checked by hand in both agents and the terminals they
+    /// run in: the thresholds were read in their code, not measured, and a piece that arrived
+    /// while the prompt was still redrawing the last one could land out of place.
+    @UserDefault(key: "pasteAgentPromptsInPieces", defaultValue: false)
+    var pasteAgentPromptsInPieces: Bool
+
     /// When on, a trailing "press enter" in the dictation is removed from the text and a Return
     /// key is pressed after the text is inserted — submitting the message/prompt (Claude Code,
     /// Slack, …). Opt-in: a stray Return can submit a form prematurely. See `stripSubmitCommand`.

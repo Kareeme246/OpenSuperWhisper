@@ -312,8 +312,11 @@ final class DictationPipeline: ObservableObject {
             }
 
             // Submit only when auto-paste actually inserted text somewhere. A short settle delay lets
-            // the pasted text land in the field before Return reaches it.
-            if shouldSubmit && AppPreferences.shared.autoPasteTranscription && delivery == .inserted {
+            // the pasted text land in the field before Return reaches it. A paste in pieces takes
+            // seconds, long enough to throw the dictation away while it goes in (#165): what is
+            // in the field then stays there, unsent.
+            if shouldSubmit && AppPreferences.shared.autoPasteTranscription && delivery == .inserted
+                && !discarding {
                 try? await Task.sleep(nanoseconds: 120_000_000)
                 TextInserter.pressReturn()
             }
@@ -401,7 +404,9 @@ final class DictationPipeline: ObservableObject {
         case inserted
         /// On the clipboard for a manual ⌘V, and the user is told so.
         case onClipboardAnnounced
-        /// Not inserted, with the warning off: held for the paste-last shortcut.
+        /// Not inserted, with the warning off: held for the paste-last shortcut. Or only in part
+        /// (#165), the rest held the same way unless a newer dictation took over or this one was
+        /// thrown away; anything worth saying about it is already said.
         case held
     }
 
@@ -421,8 +426,8 @@ final class DictationPipeline: ObservableObject {
             bringBack: { await FocusReturn.bringBack($0) },
             hold: { TranscriptInserter.holdUndelivered(IndicatorViewModel.applyPostProcessing(text),
                                                        onClipboard: $0) },
-            insert: { self.insertText(text, targetBundleID: context.bundleID, language: language,
-                                      submitting: submitting) })
+            insert: { await self.insertText(text, context: context, language: language,
+                                            submitting: submitting) })
     }
 
     /// A dictation that is only the spoken submit command presses Return in the app it started
@@ -439,7 +444,7 @@ final class DictationPipeline: ObservableObject {
     static func deliverSubmitOnly(to target: FocusTarget?, returningFocus: Bool,
                                   bringBack: (FocusTarget) async -> FocusReturn.Outcome) async -> Delivery {
         await deliver(to: target, returningFocus: returningFocus, warn: false, keepOnClipboard: false,
-                      bringBack: bringBack, hold: { _ in }, insert: { false })
+                      bringBack: bringBack, hold: { _ in }, insert: { .inserted })
     }
 
     /// The delivery with the system passed in, so tests can run it without moving the focus or
@@ -450,12 +455,12 @@ final class DictationPipeline: ObservableObject {
     ///     auto-paste off nothing would follow the focus change, and pulling the user back to
     ///     another app for nothing is worse than leaving them where they are.
     ///   - hold: keeps the text for a manual paste, on the clipboard when passed `true`.
-    ///   - insert: the usual insertion; `true` when it found no field and copied instead.
+    ///   - insert: the usual insertion, and where it left the text.
     static func deliver(to target: FocusTarget?, returningFocus: Bool, warn: Bool,
                         keepOnClipboard: Bool,
                         bringBack: (FocusTarget) async -> FocusReturn.Outcome,
                         hold: (_ onClipboard: Bool) -> Void,
-                        insert: () -> Bool) async -> Delivery {
+                        insert: () async -> Delivery) async -> Delivery {
         if returningFocus, let target {
             let outcome = await bringBack(target)
             Diag.mark("focus return before insertion: \(outcome)")
@@ -464,20 +469,24 @@ final class DictationPipeline: ObservableObject {
                 return warn ? .onClipboardAnnounced : .held
             }
         }
-        return insert() ? .onClipboardAnnounced : .inserted
+        return await insert()
     }
 
-    /// Returns `true` when auto-paste ran but no editable field was focused, so the caller can leave
-    /// the text on the clipboard and notify ⌘V. When no target is found, typing is skipped. The
-    /// insertion policy itself lives in `TranscriptInserter`, shared with the re-paste shortcut.
-    @discardableResult
-    private func insertText(_ text: String, targetBundleID: String?, language: String,
-                            submitting: Bool) -> Bool {
+    /// Inserts through `TranscriptInserter`, where the insertion policy lives, shared with the
+    /// re-paste shortcut. A paste in pieces that stopped part way is `.held`: Return must not
+    /// send the half that went in (#165). It stops too once the dictation is thrown away.
+    private func insertText(_ text: String, context: ContextSnapshot, language: String,
+                            submitting: Bool) async -> Delivery {
         let prefs = AppPreferences.shared
         let fitToField = prefs.autoPasteTranscription && prefs.matchTextAroundCaret
-        return TranscriptInserter.insert(TranscriptInserter.prepared(text, fitToField: fitToField,
-                                                                     language: language),
-                                         honorAutoPastePreference: true,
-                                         targetBundleID: targetBundleID, submitting: submitting)
+        let insertion = await TranscriptInserter.insert(
+            TranscriptInserter.prepared(text, fitToField: fitToField, language: language),
+            honorAutoPastePreference: true, targetBundleID: context.bundleID,
+            windowTitle: context.windowTitle, submitting: submitting, wanted: { !discarding })
+        switch insertion {
+        case .done: return .inserted
+        case .onClipboard: return .onClipboardAnnounced
+        case .cutShort: return .held
+        }
     }
 }

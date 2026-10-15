@@ -8,6 +8,10 @@ extension ClipboardUtil {
     enum PasteOutcome: Equatable {
         case landed
         case missed
+        /// A newer borrow took the clipboard over before this one was settled; that one reports
+        /// for both. A paste in pieces needs to hear it (#165): a piece whose text was replaced
+        /// before anyone read it will never be read, and waiting for it would wait forever.
+        case superseded
     }
 
     /// What the clipboard holds once the paste is over.
@@ -75,8 +79,10 @@ extension ClipboardUtil {
     /// Newer content wins: if anything else writes to the pasteboard meanwhile (a user copy), the
     /// clipboard is left alone. Overlapping borrows — a dictation insert followed within the delay
     /// by the paste-last shortcut — coalesce onto the first borrow's snapshot, and only the last
-    /// one reports an outcome: an earlier paste whose text was replaced before anyone read it
-    /// can't be told apart from one still on its way.
+    /// one reports whether it landed: an earlier paste whose text was replaced before anyone read
+    /// it can't be told apart from one still on its way, so it is told `.superseded`. A paste in
+    /// pieces is built on this (#165): each piece takes over from the one before once `read` says
+    /// it was taken, so the clipboard comes back once, after the last.
     static func borrowForPaste(_ text: String,
                                rich: RichPasteText? = nil,
                                keeping kept: String? = nil,
@@ -85,6 +91,7 @@ extension ClipboardUtil {
                                afterMissing: Afterwards = .previousContents,
                                timing: PasteTiming = .current,
                                paste: () -> Void,
+                               read: (() -> Void)? = nil,
                                outcome: @escaping (PasteOutcome) -> Void = { _ in }) {
         let saved: Snapshot?
         if let pending = pendingBorrows.removeValue(forKey: pasteboard.name) {
@@ -104,7 +111,7 @@ extension ClipboardUtil {
         let borrow = Borrow(pasteboard: pasteboard, text: kept ?? text, saved: saved,
                             changeCount: offerLazily(watcher, on: pasteboard),
                             afterLanding: afterLanding, afterMissing: afterMissing,
-                            timing: timing, outcome: outcome)
+                            timing: timing, read: read, outcome: outcome)
         watcher.onRead = { [weak borrow] in borrow?.noteRead() }
         pendingBorrows[pasteboard.name] = borrow
         paste()
@@ -148,6 +155,7 @@ extension ClipboardUtil {
         private let afterLanding: Afterwards
         private let afterMissing: Afterwards
         private let timing: PasteTiming
+        private let read: (() -> Void)?
         private let outcome: (PasteOutcome) -> Void
         private var postedAt: DispatchTime?
         private var readAt: DispatchTime?
@@ -157,7 +165,7 @@ extension ClipboardUtil {
 
         init(pasteboard: NSPasteboard, text: String, saved: Snapshot?, changeCount: Int,
              afterLanding: Afterwards, afterMissing: Afterwards, timing: PasteTiming,
-             outcome: @escaping (PasteOutcome) -> Void) {
+             read: (() -> Void)?, outcome: @escaping (PasteOutcome) -> Void) {
             self.pasteboard = pasteboard
             self.text = text
             self.saved = saved
@@ -165,6 +173,7 @@ extension ClipboardUtil {
             self.afterLanding = afterLanding
             self.afterMissing = afterMissing
             self.timing = timing
+            self.read = read
             self.outcome = outcome
         }
 
@@ -183,12 +192,14 @@ extension ClipboardUtil {
             guard readAt == nil, !isCancelled else { return }
             readAt = .now()
             if postedAt != nil { scheduleLanding() }
+            read?()
         }
 
         func cancel() {
             isCancelled = true
             timer?.cancel()
             timer = nil
+            outcome(.superseded)
         }
 
         private func scheduleLanding() {

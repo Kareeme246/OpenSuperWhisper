@@ -71,6 +71,7 @@ final class DefaultsKeySnapshotTests: XCTestCase {
         "mouseButtonHotkey",
         "noSpeechThreshold",
         "notifyWhenNoPasteTarget",
+        "pasteAgentPromptsInPieces",
         "pasteInsteadOfTyping",
         "pasteIntoOriginalField",
         "pasteListsAsRichText",
@@ -259,6 +260,7 @@ final class DefaultsKeySnapshotTests: XCTestCase {
         assertWrites("pasteIntoOriginalField") { prefs.pasteIntoOriginalField = false }
         assertWrites("matchTextAroundCaret") { prefs.matchTextAroundCaret = true }
         assertWrites("pasteListsAsRichText") { prefs.pasteListsAsRichText = true }
+        assertWrites("pasteAgentPromptsInPieces") { prefs.pasteAgentPromptsInPieces = true }
         assertWrites("submitOnVoiceCommand") { prefs.submitOnVoiceCommand = true }
         assertWrites("stopPhrase") { prefs.stopPhrase = "over and out" }
         assertWrites("stopPhraseSubmits") { prefs.stopPhraseSubmits = true }
@@ -424,6 +426,7 @@ final class DefaultsKeySnapshotTests: XCTestCase {
         XCTAssertEqual(prefs.pasteIntoOriginalField, true)
         XCTAssertEqual(prefs.matchTextAroundCaret, false)
         XCTAssertEqual(prefs.pasteListsAsRichText, false)
+        XCTAssertEqual(prefs.pasteAgentPromptsInPieces, false)
         XCTAssertEqual(prefs.submitOnVoiceCommand, false)
         XCTAssertEqual(prefs.stopPhrase, "")
         XCTAssertEqual(prefs.stopPhraseSubmits, false)
