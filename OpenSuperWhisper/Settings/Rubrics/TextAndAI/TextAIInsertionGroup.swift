@@ -66,6 +66,11 @@ struct TextAIInsertionGroup: View {
                        advanced: true) {
                 SSwitch(isOn: $viewModel.matchTextAroundCaret)
             }
+            SettingRow("Lists as bullets",
+                       hint: "A pasted list becomes real bullets or numbers in apps that take formatted text, like Notes, Mail, Slack, Notion, Word and browsers. Everywhere else, terminals and code editors included, it stays as “- ” lines.",
+                       advanced: true) {
+                SSwitch(isOn: $viewModel.pasteListsAsRichText)
+            }
             whisperRows
             SettingRow("Per-app exceptions", hint: perAppHint, advanced: true) {
                 Button("Open →") {

@@ -63,7 +63,9 @@ extension ClipboardUtil {
     /// request is the paste landing. So the clipboard comes back a short while after the app in
     /// front actually read the text, not a fixed time after the keystroke, which a busy app could
     /// lose (#162). When nobody asks before the deadline, `outcome` reports `.missed` and the
-    /// clipboard ends up as `afterMissing` says.
+    /// clipboard ends up as `afterMissing` says. With `rich`, the same item also offers the text
+    /// as RTF and HTML (#166), just as lazily: a read of any of them is the landing, and the
+    /// plain string stays on it for every app that reads nothing else.
     ///
     /// Clipboard managers poll the pasteboard too, and their read would look like the paste. The
     /// transient markers keep the ones that honour nspasteboard.org (Raycast, Maccy, Paste) to a
@@ -76,6 +78,7 @@ extension ClipboardUtil {
     /// one reports an outcome: an earlier paste whose text was replaced before anyone read it
     /// can't be told apart from one still on its way.
     static func borrowForPaste(_ text: String,
+                               rich: RichPasteText? = nil,
                                keeping kept: String? = nil,
                                on pasteboard: NSPasteboard = .general,
                                afterLanding: Afterwards = .previousContents,
@@ -97,7 +100,7 @@ extension ClipboardUtil {
             saved = nil
         }
 
-        let watcher = PasteReadWatcher(text: text)
+        let watcher = PasteReadWatcher(text: text, rich: rich)
         let borrow = Borrow(pasteboard: pasteboard, text: kept ?? text, saved: saved,
                             changeCount: offerLazily(watcher, on: pasteboard),
                             afterLanding: afterLanding, afterMissing: afterMissing,
@@ -117,14 +120,23 @@ extension ClipboardUtil {
 
     /// Writes one item whose text is supplied on request, with the transient markers set
     /// up front. Returns the change count the write produced.
+    ///
+    /// With rich text the UTF-16 plain text is offered as well: left out, the system derives it
+    /// from the RTF, which drops the "- " and "1. " the plain lines keep, and an app reading that
+    /// type would get bare lines.
     private static func offerLazily(_ watcher: PasteReadWatcher, on pasteboard: NSPasteboard) -> Int {
         pasteboard.prepareForNewContents(with: .currentHostOnly)
         let item = NSPasteboardItem()
-        item.setDataProvider(watcher, forTypes: [.string])
+        let types: [NSPasteboard.PasteboardType] = watcher.rich == nil
+            ? [.string] : [.rtf, .html, utf16PlainText, .string]
+        item.setDataProvider(watcher, forTypes: types)
         for type in transientTypes { item.setData(Data(), forType: type) }
         pasteboard.writeObjects([item])
         return pasteboard.changeCount
     }
+
+    /// The plain text as older and Carbon-era apps read it.
+    static let utf16PlainText = NSPasteboard.PasteboardType("public.utf16-external-plain-text")
 
     /// One borrow, from the write to the moment the clipboard is settled.
     private final class Borrow {
@@ -221,16 +233,23 @@ extension ClipboardUtil {
 /// borrow's state and timers are main-thread only, so the news is carried over there.
 private final class PasteReadWatcher: NSObject, NSPasteboardItemDataProvider {
     let text: String
+    let rich: RichPasteText?
     /// Set once, before the text is offered, and only read afterwards.
     var onRead: (() -> Void)?
 
-    init(text: String) {
+    init(text: String, rich: RichPasteText?) {
         self.text = text
+        self.rich = rich
     }
 
     func pasteboard(_ pasteboard: NSPasteboard?, item: NSPasteboardItem,
                     provideDataForType type: NSPasteboard.PasteboardType) {
-        item.setString(text, forType: type)
+        switch (type, rich) {
+        case (.html, let rich?): item.setData(rich.html, forType: type)
+        case (.rtf, let rich?): item.setData(rich.rtf, forType: type)
+        case (ClipboardUtil.utf16PlainText, _): item.setData(text.data(using: .utf16) ?? Data(), forType: type)
+        default: item.setString(text, forType: type)
+        }
         guard let onRead else { return }
         if Thread.isMainThread {
             onRead()
